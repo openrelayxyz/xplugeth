@@ -14,6 +14,10 @@ func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
 	log.Info("Example module initialized", "s", s, "b", b)
 }
 
+func (*exampleModule) Shutdown() {
+	log.Info("Byeee!")
+}
+
 func init() {
 	xplugeth.RegisterModule[exampleModule]()
 }
