@@ -4,6 +4,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/openrelayxyz/xplugeth"
@@ -23,10 +24,6 @@ func init() {
 	xplugeth.RegisterModule[demoModule]()
 }
 
-// Jesse Note: In the case below we are aquiring a client by attaching to the node object. This gives us access to the various rpc apis in geth. Here we are
-// consuming the chain database and then checking for the lastest block number.
-
-
 func (*demoModule) Blockchain() {
 
 	var chainCall bool
@@ -42,11 +39,46 @@ func (*demoModule) Blockchain() {
 		log.Error("Error calling blockNumber from client, stack demo plugin", "err", err)
 	}
 
-	// Jesse Note: the condition below is where we will ultimately be surveying our hooks and injections. At his point we are just checking to make sure that
-	// the chain was imported. What I would like you to do is to add another condition in which we confirm that the block number is what we expect and that 
-	// the block has the number of transactions that we expect. In order to accomplish this you will need to use the eth_getBlockByNumber method as well as
-	// do some type conversions. For example the blockCall string above can be converted to a uint64 using the DecodeUint64 function in /common/hexutil/DecodeUint64.
-	// a block can be unmarshalled using tools in /core/types which should be somewhat familar to you. 
+	var transactionCountCall string
+	if err := client.Call(&transactionCountCall, "eth_getBlockTransactionCountByNumber", blockCall); err != nil {
+		log.Error("Error fetching transaction count by block number", "err", err)
+		os.Exit(1)
+	}
+
+	transactionCount, err := hexutil.DecodeUint64(transactionCountCall)
+	if err != nil {
+		log.Error("Error decoding transaction count", "err", err)
+		os.Exit(1)
+	}
+
+	log.Info("transaction_count", "length", transactionCount)
+
+	expectedBlocknumber, err := hexutil.DecodeUint64(blockCall)
+	if err != nil || expectedBlocknumber <= 0 {
+		log.Error("Error decoding block number from client, stack demo plugin", "err", err)
+		os.Exit(1)
+	}
+
+	var block types.Block
+	if err := client.Call(&block, "eth_getBlockByNumber", blockCall, true); err != nil {
+		log.Error("Error fetching block by number from client, stack demo plugin", "err", err)
+		os.Exit(1)
+	}
+
+	blockNumber, err := hexutil.DecodeUint64(block.Number)
+	if err != nil {
+		log.Error("Error decoding block number from block", "err", err)
+	}
+
+	if expectedBlocknumber != blockNumber {
+		log.Error("Block number mismatch", "expected", expectedBlocknumber, "actual", blockNumber)
+		os.Exit(1)
+	} else {
+		log.Info("Block number matches")
+	}
+
+	length := len(block.Transactions)
+	log.Info("Length of transactions", "length", length)
 
 	if chainCall != true {
 		log.Error("chain not imported", "chain", chainCall)
@@ -56,4 +88,3 @@ func (*demoModule) Blockchain() {
 		os.Exit(0)
 	}
 }
-
