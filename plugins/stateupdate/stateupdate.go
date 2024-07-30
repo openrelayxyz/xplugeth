@@ -16,13 +16,9 @@ import (
 
 type stateUpdateModule struct{}
 
-var (
-	SUcount      int
-	stateUpdates []map[string]interface{}
-)
+var SUcount int
 
 func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
-	// replace with path to control data
 	file, err := os.ReadFile("./test/control.json.gz")
 	if err != nil {
 		log.Error("cannot read file control.json.gz")
@@ -48,33 +44,9 @@ func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
 func (*stateUpdateModule) PluginStateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
 	SUcount += 1
 
-	stateUpdate := make(map[string]interface{})
-	stateUpdates = append(stateUpdates, stateUpdate)
-
-	if len(blockRoot) > 0 {
-		stateUpdate["blockRoot"] = blockRoot.Bytes()
-	}
-	if len(parentRoot) > 0 {
-		stateUpdate["parentRoot"] = parentRoot.Bytes()
-	}
-	if len(destructs) > 0 {
-		stateUpdate["destructs"] = destructs
-	}
-	if len(accounts) > 0 {
-		stateUpdate["accounts"] = accounts
-	}
-	if len(storage) > 0 {
-		stateUpdate["storage"] = storage
-	}
-	if len(codeUpdates) > 0 {
-		stateUpdate["codeUpdates"] = codeUpdates
-	}
-}
-
-func CompareStateUpdate() {
 	expectedData, err := stateDataDecompress()
 	if err != nil {
-		log.Error("Failed to load expected data", "error", err)
+		log.Error("Failed to load control data", "error", err)
 	}
 
 	blockNumbers := make([]uint64, 0, len(expectedData))
@@ -88,20 +60,45 @@ func CompareStateUpdate() {
 		expectedDataSlice[i] = expectedData[blockNumber]
 	}
 
-	for i, state := range stateUpdates {
-		for k, v := range state {
-			expected := expectedDataSlice[i]
-			if k == "blockRoot" || k == "parentRoot" {
-				blockRoot := v.([]byte)
-				expectedBlockRoot := []byte(expected[k].(string))
-				if !bytes.Equal(blockRoot, expectedBlockRoot) {
-					log.Error("Mismatch in blockRoot", "index", i, "expected", expectedBlockRoot, "actual", blockRoot)
-				} else {
-					log.Info("block root match")
-				}
+	currentBlock := blockNumbers[SUcount-1]
+	expected := expectedData[currentBlock]
+
+	if expectedBlockRootStr, ok := expected["blockRoot"].(string); ok {
+		expectedBlockRoot := common.HexToHash(expectedBlockRootStr).Bytes()
+		if !bytes.Equal(blockRoot.Bytes(), expectedBlockRoot) {
+			log.Error("Mismatch in blockRoot", "block", currentBlock, "expected", common.BytesToHash(expectedBlockRoot), "actual", blockRoot)
+		}
+	}
+
+	if expectedParentRootStr, ok := expected["parentRoot"].(string); ok {
+		expectedParentRoot := common.HexToHash(expectedParentRootStr).Bytes()
+		if !bytes.Equal(parentRoot.Bytes(), expectedParentRoot) {
+			log.Error("Mismatch in parentRoot", "block", currentBlock, "expected", common.BytesToHash(expectedParentRoot), "actual", parentRoot)
+		}
+	}
+
+	if expectedDestructs, ok := expected["destructs"].(map[string]interface{}); ok {
+		for addrStr := range expectedDestructs {
+			addr := common.HexToHash(addrStr)
+			if _, exists := destructs[addr]; !exists {
+				log.Error("Missing destruct", "block", currentBlock, "address", addr)
 			}
 		}
 	}
+
+	if expectedAccounts, ok := expected["accounts"].(map[string]interface{}); ok {
+		expectedAccountsCount := len(expectedAccounts)
+		actualAccountsCount := len(accounts)
+
+		if expectedAccountsCount != actualAccountsCount {
+			log.Error("Mismatch in number of accounts", "block", currentBlock, "expected", expectedAccountsCount, "actual", actualAccountsCount)
+		} else {
+			log.Info("Account counts match", "block", currentBlock, "count", actualAccountsCount)
+		}
+	} else {
+		log.Error("Expected accounts data not found or has incorrect type", "block", currentBlock)
+	}
+
 }
 
 func init() {
