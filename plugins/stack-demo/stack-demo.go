@@ -3,12 +3,11 @@ package example
 import (
 	"os"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/openrelayxyz/xplugeth"
-	"github.com/openrelayxyz/xplugeth/plugins/stateupdate"
 	"github.com/openrelayxyz/xplugeth/types"
 )
 
@@ -44,17 +43,16 @@ func (*demoModule) Blockchain() {
 	if err != nil {
 		log.Error("number decodeing error, stack demo plugin", "err", err)
 		os.Exit(1)
-	} 
+	}
 
 	if chainCall != true {
 		log.Error("chain not imported", "chain", chainCall)
 		os.Exit(1)
-	} 
+	}
 	if blockNumber != 2000 {
 		log.Error("blockNumber mismatch, chain not imported properly", "actual number", blockNumber)
 		os.Exit(1)
 	} else {
-		log.Info("test successful", "state update count", stateupdate.SUCount)
 		os.RemoveAll("./test/testDataDir")
 		os.Exit(0)
 	}
