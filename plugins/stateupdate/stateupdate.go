@@ -3,20 +3,37 @@ package stateupdate
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"os"
-	"sort"
+	"reflect"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 )
 
 type stateUpdateModule struct{}
 
-var SUcount int
+var (
+	stack        node.Node
+	SUcount      int
+	StateUpdates = make(map[uint64]map[string]interface{})
+)
+
+func init() {
+	xplugeth.RegisterModule[stateUpdateModule]()
+}
+
+func (*stateUpdateModule) InitializeNode(s *node.Node, b types.Backend) {
+	stack = *s
+	log.Info("state update module initialized")
+}
 
 func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
 	file, err := os.ReadFile("./test/control.json.gz")
@@ -28,10 +45,9 @@ func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	defer r.Close()
 
-	raw, _ := io.ReadAll(r)
+	raw, err := io.ReadAll(r)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		return nil, err
 	}
@@ -41,66 +57,182 @@ func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
 	return stateObject, nil
 }
 
+func getBlockNumber() (string, error) {
+	client := stack.Attach()
+	var num string
+	if err := client.Call(&num, "eth_blockNumber"); err != nil {
+		return "", err
+	} else {
+		return num, nil
+	}
+}
+
 func (*stateUpdateModule) PluginStateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
 	SUcount += 1
 
+	n, err := getBlockNumber()
+	if err != nil {
+		log.Error("error returned from getBlockNumber, test plugin", "err", err)
+	}
+	nbr, _ := hexutil.DecodeUint64(n)
+
+	stateUpdate := map[string]interface{}{
+		"blockRoot":  blockRoot.Bytes(),
+		"parentRoot": parentRoot.Bytes(),
+		"accounts":   accounts,
+		"storages":   storage,
+		"code":       codeUpdates,
+	}
+	StateUpdates[nbr] = stateUpdate
+	compareStateUpdates()
+}
+
+func compareStateUpdates() {
 	expectedData, err := stateDataDecompress()
 	if err != nil {
 		log.Error("Failed to load control data", "error", err)
 	}
+	if SUcount >= len(expectedData) {
+		for blockNumber, stateUpdate := range StateUpdates {
+			expectedUpdate, exists := expectedData[blockNumber]
+			if !exists {
+				log.Info("No expected data for block", "block", blockNumber)
+				continue
+			}
+			for k, v := range stateUpdate {
+				switch k {
+				case "blockRoot", "parentRoot":
+					expectedValue, exists := expectedUpdate[k]
+					if !exists {
+						continue
+					}
+					expectedBytes, err := hexutil.Decode(expectedValue.(string))
+					if err != nil {
+						log.Error("Failed to decode expected value", "block", blockNumber, "key", k, "error", err)
+						continue
+					}
+					actualBytes := v.([]byte)
+					if !bytes.Equal(actualBytes, expectedBytes) {
+						log.Error("Root mismatch", "block", blockNumber, "key", k, "actual", hexutil.Encode(actualBytes), "expected", hexutil.Encode(expectedBytes))
+					}
 
-	blockNumbers := make([]uint64, 0, len(expectedData))
-	for blockNumber := range expectedData {
-		blockNumbers = append(blockNumbers, blockNumber)
-	}
-	sort.Slice(blockNumbers, func(i, j int) bool { return blockNumbers[i] < blockNumbers[j] })
+				case "accounts":
+					if expectedAccounts, exists := expectedUpdate[k]; exists {
+						expectedCodeUpdatesMap, ok := expectedAccounts.(map[string]interface{})
+						if !ok {
+							log.Error("Invalid type for expected accounts", "block", blockNumber)
+							continue
+						}
+						actualAccounts, ok := v.(map[common.Hash][]byte)
+						if !ok {
+							log.Error("Invalid type for accounts", "block", blockNumber)
+							continue
+						}
+						for hash, actualValue := range actualAccounts {
+							expectedValue, exists := expectedCodeUpdatesMap[hash.Hex()]
+							if !exists {
+								continue
+							}
+							expectedBytes, err := base64.StdEncoding.DecodeString(expectedValue.(string))
+							if err != nil {
+								log.Error("Failed to decode expected account value", "block", blockNumber, "account", hash.Hex(), "error", err)
+								continue
+							}
+							if !bytes.Equal(actualValue, expectedBytes) {
+								log.Error("Accounts mismatch",
+									"block", blockNumber,
+									"account", hash.Hex(),
+									"actual", hexutil.Encode(actualValue),
+									"expected", hexutil.Encode(expectedBytes))
+							}
+						}
+					}
+				case "storages":
+					if expectedStorage, exists := expectedUpdate[k]; exists {
+						expectedStorageMap, ok := expectedStorage.(map[string]interface{})
+						if !ok {
+							log.Error("Invalid type for expected storage", "block", blockNumber)
+							continue
+						}
 
-	expectedDataSlice := make([]map[string]interface{}, len(blockNumbers))
-	for i, blockNumber := range blockNumbers {
-		expectedDataSlice[i] = expectedData[blockNumber]
-	}
+						actualStorage, ok := v.(map[common.Hash]map[common.Hash][]byte)
+						if !ok {
+							log.Error("Invalid type for storage", "block", blockNumber)
+							continue
+						}
 
-	currentBlock := blockNumbers[SUcount-1]
-	expected := expectedData[currentBlock]
+						for outerHash, innerMap := range actualStorage {
+							expectedInner, exists := expectedStorageMap[outerHash.Hex()]
+							if !exists {
+								continue
+							}
 
-	if expectedBlockRootStr, ok := expected["blockRoot"].(string); ok {
-		expectedBlockRoot := common.HexToHash(expectedBlockRootStr).Bytes()
-		if !bytes.Equal(blockRoot.Bytes(), expectedBlockRoot) {
-			log.Error("Mismatch in blockRoot", "block", currentBlock, "expected", common.BytesToHash(expectedBlockRoot), "actual", blockRoot)
-		}
-	}
+							expectedInnerMap, ok := expectedInner.(map[string]interface{})
+							if !ok {
+								log.Error("Invalid type for expected inner storage map", "block", blockNumber, "outerKey", outerHash.Hex())
+								continue
+							}
 
-	if expectedParentRootStr, ok := expected["parentRoot"].(string); ok {
-		expectedParentRoot := common.HexToHash(expectedParentRootStr).Bytes()
-		if !bytes.Equal(parentRoot.Bytes(), expectedParentRoot) {
-			log.Error("Mismatch in parentRoot", "block", currentBlock, "expected", common.BytesToHash(expectedParentRoot), "actual", parentRoot)
-		}
-	}
+							for innerHash, actualValue := range innerMap {
+								expectedValue, exists := expectedInnerMap[innerHash.Hex()]
+								if !exists {
+									continue
+								}
+								expectedStr, ok := expectedValue.(string)
+								if !ok {
+									log.Error("Invalid type for expected storage value",
+										"block", blockNumber,
+										"outerKey", outerHash.Hex(),
+										"innerKey", innerHash.Hex(),
+										"type", reflect.TypeOf(expectedValue))
+									continue
+								}
 
-	if expectedDestructs, ok := expected["destructs"].(map[string]interface{}); ok {
-		for addrStr := range expectedDestructs {
-			addr := common.HexToHash(addrStr)
-			if _, exists := destructs[addr]; !exists {
-				log.Error("Missing destruct", "block", currentBlock, "address", addr)
+								expectedBytes, err := base64.StdEncoding.DecodeString(expectedStr)
+								if err != nil {
+									log.Error("Failed to decode expected storage value", "block", blockNumber, "outerKey", outerHash.Hex(), "innerKey", innerHash.Hex(), "error", err)
+									continue
+								}
+
+								if !bytes.Equal(actualValue, expectedBytes) {
+									log.Error("Storage mismatch", "block", blockNumber, "outerKey", outerHash.Hex(), "innerKey", innerHash.Hex(), "actual", hexutil.Encode(actualValue), "expected", hexutil.Encode(expectedBytes))
+								}
+							}
+						}
+					}
+				case "code":
+					if expectedCodeUpdates, exists := expectedUpdate[k]; exists {
+						expectedCodeUpdatesMap, ok := expectedCodeUpdates.(map[string]interface{})
+						if !ok {
+							log.Error("Invalid type for expected codeupdates", "block", blockNumber)
+							continue
+						}
+						actual, ok := v.(map[common.Hash][]byte)
+						if !ok {
+							log.Error("Invalid type for accounts", "block", blockNumber)
+							continue
+						}
+						for hash, value := range actual {
+							expectedValue, exists := expectedCodeUpdatesMap[hash.Hex()]
+							if !exists {
+								continue
+							}
+							expectedBytes, err := base64.StdEncoding.DecodeString(expectedValue.(string))
+							if err != nil {
+								log.Error("Failed to decode expected codeupdates value", "block", blockNumber, "code", hash.Hex(), "error", err)
+								continue
+							}
+							if !bytes.Equal(value, expectedBytes) {
+								log.Error("Code update mismatch",
+									"block", blockNumber,
+									"codeHash", hash.Hex(),
+									"actual", hexutil.Encode(value),
+									"expected", hexutil.Encode(expectedBytes))
+							}
+						}
+					}
+				}
 			}
 		}
 	}
-
-	if expectedAccounts, ok := expected["accounts"].(map[string]interface{}); ok {
-		expectedAccountsCount := len(expectedAccounts)
-		actualAccountsCount := len(accounts)
-
-		if expectedAccountsCount != actualAccountsCount {
-			log.Error("Mismatch in number of accounts", "block", currentBlock, "expected", expectedAccountsCount, "actual", actualAccountsCount)
-		} else {
-			log.Info("Account counts match", "block", currentBlock, "count", actualAccountsCount)
-		}
-	} else {
-		log.Error("Expected accounts data not found or has incorrect type", "block", currentBlock)
-	}
-
-}
-
-func init() {
-	xplugeth.RegisterModule[stateUpdateModule]()
 }
