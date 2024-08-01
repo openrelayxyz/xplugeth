@@ -139,11 +139,7 @@ func compareStateUpdates() {
 								continue
 							}
 							if !bytes.Equal(actualValue, expectedBytes) {
-								log.Error("Accounts mismatch",
-									"block", blockNumber,
-									"account", hash.Hex(),
-									"actual", hexutil.Encode(actualValue),
-									"expected", hexutil.Encode(expectedBytes))
+								log.Error("Accounts mismatch", "block", blockNumber, "account", hash.Hex(), "actual", hexutil.Encode(actualValue), "expected", hexutil.Encode(expectedBytes))
 							}
 						}
 					}
@@ -166,7 +162,6 @@ func compareStateUpdates() {
 							if !exists {
 								continue
 							}
-
 							expectedInnerMap, ok := expectedInner.(map[string]interface{})
 							if !ok {
 								log.Error("Invalid type for expected inner storage map", "block", blockNumber, "outerKey", outerHash.Hex())
@@ -223,12 +218,35 @@ func compareStateUpdates() {
 								continue
 							}
 							if !bytes.Equal(value, expectedBytes) {
-								log.Error("Code update mismatch",
-									"block", blockNumber,
-									"codeHash", hash.Hex(),
-									"actual", hexutil.Encode(value),
-									"expected", hexutil.Encode(expectedBytes))
+								log.Error("Code update mismatch", "block", blockNumber, "codeHash", hash.Hex(), "actual", hexutil.Encode(value), "expected", hexutil.Encode(expectedBytes))
 							}
+						}
+					}
+				case "destructs":
+					expectedDestructs, exists := expectedUpdate[k]
+					if !exists {
+						log.Error("missing expected destructs", "block", blockNumber)
+						continue
+					}
+					expectedDestructsMap, ok := expectedDestructs.(map[string]interface{})
+					if !ok {
+						log.Error("invalid type for expected destructs", "block", blockNumber)
+						continue
+					}
+					actualDestructs, ok := v.(map[common.Hash]struct{})
+					if !ok {
+						log.Error("invalid type for actual destructs", "block", blockNumber)
+						continue
+					}
+					for hash := range actualDestructs {
+						if _, exists := expectedDestructsMap[hash.Hex()]; !exists {
+							log.Error("Unexpected destruct", "block", blockNumber, "address", hash.Hex())
+						}
+					}
+					for hash := range expectedDestructsMap {
+						addressHash := common.HexToHash(hash)
+						if _, exists := actualDestructs[addressHash]; !exists {
+							log.Error("Missing destruct", "block", blockNumber, "address", hash)
 						}
 					}
 				}
