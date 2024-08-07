@@ -148,7 +148,6 @@ func compareStateUpdates(stateUpdate map[string]interface{}, nbr uint64) {
 			if !bytes.Equal(actualBytes, expectedBytes) {
 				log.Error("Root mismatch", "block", nbr, "key", k, "actual", hexutil.Encode(actualBytes), "expected", hexutil.Encode(expectedBytes))
 			}
-
 		case "accounts":
 			if expectedAccounts, exists := expectedUpdate[k]; exists {
 				expectedCodeUpdatesMap, ok := expectedAccounts.(map[string]interface{})
@@ -186,7 +185,7 @@ func compareStateUpdates(stateUpdate map[string]interface{}, nbr uint64) {
 
 				actualStorage, ok := v.(map[common.Hash]map[common.Hash][]byte)
 				if !ok {
-					log.Error("Invalid type for storage", "block", nbr)
+					log.Error("Invalid type for actual storage", "block", nbr)
 					continue
 				}
 
@@ -206,8 +205,12 @@ func compareStateUpdates(stateUpdate map[string]interface{}, nbr uint64) {
 						if !exists {
 							continue
 						}
+
 						expectedStr, ok := expectedValue.(string)
 						if !ok {
+							if expectedValue == nil {
+								continue
+							}
 							log.Error("Invalid type for expected storage value",
 								"block", nbr,
 								"outerKey", outerHash.Hex(),
