@@ -2,7 +2,7 @@ module github.com/openrelayxyz/xplugeth
 
 go 1.22.4
 
-require github.com/ethereum/go-ethereum v1.14.6
+require github.com/ethereum/go-ethereum v1.14.7
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
@@ -39,7 +39,7 @@ require (
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/go-bexpr v0.1.10 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/holiman/uint256 v1.2.4 // indirect
+	github.com/holiman/uint256 v1.3.0 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/klauspost/compress v1.16.0 // indirect
