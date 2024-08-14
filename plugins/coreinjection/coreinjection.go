@@ -178,8 +178,6 @@ func (*coreinjection) PluginNewHead(block *gethType.Block, hash common.Hash, log
 				for i, l := range actualLogBytes {
 					if !bytes.Equal(l, decodedExpectedLogBytes[i]) {
 						log.Error("Mismatch in logBytes", "block", nbr, "logIndex", i, "actual", base64.StdEncoding.EncodeToString(actualLogBytes[i]), "expected", base64.StdEncoding.EncodeToString(decodedExpectedLogBytes[i]))
-					} else {
-						log.Info("it finally works thank you Jesus")
 					}
 				}
 			}
