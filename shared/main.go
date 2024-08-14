@@ -22,7 +22,7 @@ func Blockchain(s node.Node) {
 	log.Error("inside of blockchain function")
 	var chainCall bool
 	client := s.Attach()
-	if err := client.Call(&chainCall, "admin_importChain", "./test/holesky-1-2000-chain.gz"); err != nil {
+	if err := client.Call(&chainCall, "admin_importChain", "./test/chain.gz"); err != nil {
 		log.Error("Error calling importChain from client, stack demo plugin", "err", err)
 	}
 	var blockCall string
