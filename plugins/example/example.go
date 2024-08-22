@@ -7,11 +7,15 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var (
+	sessionStack *node.Node
+	sessionBackend types.Backend
+)
 
 type exampleModule struct {}
 
 func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
-	log.Info("Example module initialized", "s", s, "b", b)
+	log.Info("Example module initialized")
 }
 
 func (*exampleModule) Shutdown() {
