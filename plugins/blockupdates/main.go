@@ -9,7 +9,7 @@ import (
 	// "time"
 	// "encoding/json"
 	"math/big"
-	// lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	
 	// "io"
 
@@ -20,6 +20,7 @@ import (
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -27,27 +28,27 @@ import (
 var (
 	backend types.Backend
 // 	lastBlock core.Hash
-// 	cache *lru.Cache
-// 	recentEmits *lru.Cache
+	cache *lru.Cache
+	recentEmits *lru.Cache
 // 	snapshotFlagName = "snapshot"
 // 	log core.Logger
 // 	blockEvents core.Feed
-// 	suCh chan *stateUpdateWithRoot
+	suCh chan *stateUpdateWithRoot
 )
 
 
-// // stateUpdate will be used to track state updates
-// type stateUpdate struct {
-// 	Destructs map[core.Hash]struct{}
-// 	Accounts map[core.Hash][]byte
-// 	Storage map[core.Hash]map[core.Hash][]byte
-// 	Code map[core.Hash][]byte
-// }
+// stateUpdate will be used to track state updates
+type stateUpdate struct {
+	Destructs map[common.Hash]struct{}
+	Accounts map[common.Hash][]byte
+	Storage map[common.Hash]map[common.Hash][]byte
+	Code map[common.Hash][]byte
+}
 
-// type stateUpdateWithRoot struct {
-// 	su *stateUpdate
-// 	root core.Hash
-// }
+type stateUpdateWithRoot struct {
+	su *stateUpdate
+	root common.Hash
+}
 
 
 // // kvpair is used for RLP encoding of maps, as maps cannot be RLP encoded directly
@@ -212,18 +213,18 @@ func InitializeNode(stack *node.Node, b types.Backend) {
 // // cache them for short term use, and write them to disk for the longer term.
 func (*BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
 	log.Error("SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSs")
-	// if backend == nil {
-	// 	log.Warn("State update called before InitializeNode", "root", blockRoot)
-	// 	return
-	// }
-	// su := &stateUpdate{
-	// 	Destructs: destructs,
-	// 	Accounts: accounts,
-	// 	Storage: storage,
-	// 	Code: codeUpdates,
-	// }
-	// cache.Add(blockRoot, su)
-	// suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}
+	if backend == nil {
+		log.Warn("State update called before InitializeNode", "root", blockRoot)
+		return
+	}
+	su := &stateUpdate{
+		Destructs: destructs,
+		Accounts: accounts,
+		Storage: storage,
+		Code: codeUpdates,
+	}
+	cache.Add(blockRoot, su)
+	suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}
 }
 
 // // AppendAncient removes our state update records from leveldb as the
@@ -296,42 +297,41 @@ func (*BlockUpdates) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtyp
 // 	}
 // 	recentEmits.Add(hash, struct{}{})
 // }
-
-// func Reorg(common core.Hash, oldChain []core.Hash, newChain []core.Hash) {
-// 	fnList := pl.Lookup("BUPreReorg", func(item interface{}) bool {
-// 		_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
-// 		return ok
-// 	})
-// 	for _, fni := range fnList {
-// 		if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
-// 			fn(common, oldChain, newChain)
-// 		}
-// 	}
-// 	for i := len(newChain) - 1; i >= 0; i-- {
-// 		blockHash := newChain[i]
-// 		blockRLP, err := backend.BlockByHash(context.Background(), blockHash)
-// 		if err != nil {
-// 			log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
-// 			return
-// 		}
-// 		var block types.Block
-// 		if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
-// 			log.Error("Could not decode block during reorg", "hash", blockHash, "err", err)
-// 			return
-// 		}
-// 		td := backend.GetTd(context.Background(), blockHash)
-// 		newHead(block, blockHash, td)
-// 	}
-// 	fnList = pl.Lookup("BUPostReorg", func(item interface{}) bool {
-// 		_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
-// 		return ok
-// 	})
-// 	for _, fni := range fnList {
-// 		if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
-// 			fn(common, oldChain, newChain)
-// 		}
-// 	}
-// }
+func Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+	// fnList := pl.Lookup("BUPreReorg", func(item interface{}) bool {
+	// 	_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
+	// 	return ok
+	// })
+	// for _, fni := range fnList {
+	// 	if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
+	// 		fn(common, oldChain, newChain)
+	// 	}
+	// }
+	// for i := len(newChain) - 1; i >= 0; i-- {
+	// 	blockHash := newChain[i]
+	// 	blockRLP, err := backend.BlockByHash(context.Background(), blockHash)
+	// 	if err != nil {
+	// 		log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
+	// 		return
+	// 	}
+	// 	var block types.Block
+	// 	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
+	// 		log.Error("Could not decode block during reorg", "hash", blockHash, "err", err)
+	// 		return
+	// 	}
+	// 	td := backend.GetTd(context.Background(), blockHash)
+	// 	newHead(block, blockHash, td)
+	// }
+	// fnList = pl.Lookup("BUPostReorg", func(item interface{}) bool {
+	// 	_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
+	// 	return ok
+	// })
+	// for _, fni := range fnList {
+	// 	if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
+	// 		fn(common, oldChain, newChain)
+	// 	}
+	// }
+}
 
 
 // BlockUpdates is a service that lets clients query for block updates for a
@@ -366,27 +366,23 @@ type BlockUpdates struct{
 // 	return &block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code, nil
 // }
 
-// // blockUpdate handles the serialization of a block
-// func blockUpdates(ctx context.Context, block *types.Block) (map[string]interface{}, error)	{
-// 	result, err := RPCMarshalBlock(block, true, true)
-// 	if err != nil { return nil, err }
-// 	receiptBytes, err := backend.GetReceipts(ctx, block.Hash())
-// 	if err != nil { return nil, err }
-// 	var receipts types.Receipts
-// 	if err := json.Unmarshal(receiptBytes, &receipts); err != nil { return nil, err }
-// 	result["receipts"] = receipts
-// 	if v, ok := cache.Get(block.Root()); ok {
-// 		result["stateUpdates"] = v
-// 		return result, nil
-// 	}
-// 	data, err := backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
-// 	if err != nil { return nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
-// 	su := &stateUpdate{}
-// 	if err := rlp.DecodeBytes(data, su); err != nil { return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
-// 	result["stateUpdates"] = su
-// 	cache.Add(block.Root(), su)
-// 	return result, nil
-// }
+// blockUpdate handles the serialization of a block
+func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interface{}, error)	{
+	result, err := RPCMarshalBlock(block, true, true)
+	if err != nil { return nil, err }
+	result["receipts"], err = backend.GetReceipts(ctx, block.Hash())
+	if err != nil { return nil, err }
+	if v, ok := cache.Get(block.Root()); ok {
+		result["stateUpdates"] = v
+		return result, nil
+	}
+	data, err := backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
+	if err != nil { return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())}
+	su := &stateUpdate{}
+	if err := rlp.DecodeBytes(data, su); err != nil { return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
+	result["stateUpdates"] = su
+	return result, nil
+}
 
 // // BlockUpdatesByNumber retrieves a block by number, gets receipts and state
 // // updates, and serializes the response.
