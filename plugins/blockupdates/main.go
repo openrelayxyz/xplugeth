@@ -158,8 +158,8 @@ func (su *stateUpdate) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-func NewFeed() *event.Feed {
-	return &event.Feed{}
+type externalPlugins interface {
+	BlockUpdates(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte)
 }
 
 // var (
@@ -169,7 +169,9 @@ func NewFeed() *event.Feed {
 
 func init() {
 	xplugeth.RegisterModule[BlockUpdates]()
+	xplugeth.RegisterModule[externalPlugins]()
 }
+
 
 // // Initialize does initial setup of variables as the plugin is loaded.
 // func Initialize(ctx core.Context, loader core.PluginLoader, logger core.Logger) {
@@ -216,7 +218,7 @@ func init() {
 func (bu *BlockUpdates) InitializeNode(stack *node.Node, b types.Backend) {
 	bu.backend = b
 	sessionBackend = b
-	blockEvents = NewFeed()
+	blockEvents = &event.Feed{}
 	cache, _ = lru.New(128)
 	log.Error("Initialized node block updater plugin")
 }
@@ -289,56 +291,50 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 	}
 	blockEvents.Send(result)
 
-	// receipts := result["receipts"].(types.Receipts)
-	// su := result["stateUpdates"].(*stateUpdate)
-	// TODO Philip need to address the following
-	// fnList := pl.Lookup("BlockUpdates", func(item interface{}) bool {
-	// 	_, ok := item.(func(*types.Block, *big.Int, types.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte))
-	// 	log.Info("Found BlockUpdates hook", "matches", ok)
-	// 	return ok
-	// })
-	// for _, fni := range fnList {
-	// 	if fn, ok := fni.(func(*types.Block, *big.Int, types.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte)); ok {
-	// 		fn(&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code)
-	// 	}
-	// }
+	receipts := result["receipts"].(gtypes.Receipts)
+	su := result["stateUpdates"].(*stateUpdate)
+	for _, extern := range xplugeth.GetModules[externalPlugins]() {
+		extern.BlockUpdates(&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code)
+	}
+	
 	recentEmits.Add(hash, struct{}{})
 }
-func (*BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
-	// fnList := pl.Lookup("BUPreReorg", func(item interface{}) bool {
-	// 	_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
-	// 	return ok
-	// })
-	// for _, fni := range fnList {
-	// 	if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
-	// 		fn(common, oldChain, newChain)
-	// 	}
-	// }
-	// for i := len(newChain) - 1; i >= 0; i-- {
-	// 	blockHash := newChain[i]
-	// 	blockRLP, err := backend.BlockByHash(context.Background(), blockHash)
-	// 	if err != nil {
-	// 		log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
-	// 		return
-	// 	}
-	// 	var block types.Block
-	// 	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
-	// 		log.Error("Could not decode block during reorg", "hash", blockHash, "err", err)
-	// 		return
-	// 	}
-	// 	td := backend.GetTd(context.Background(), blockHash)
-	// 	newHead(block, blockHash, td)
-	// }
-	// fnList = pl.Lookup("BUPostReorg", func(item interface{}) bool {
-	// 	_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
-	// 	return ok
-	// })
-	// for _, fni := range fnList {
-	// 	if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
-	// 		fn(common, oldChain, newChain)
-	// 	}
-	// }
-}
+
+// func (*BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+// 	fnList := pl.Lookup("BUPreReorg", func(item interface{}) bool {
+// 		_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
+// 		return ok
+// 	})
+// 	for _, fni := range fnList {
+// 		if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
+// 			fn(common, oldChain, newChain)
+// 		}
+// 	}
+// 	for i := len(newChain) - 1; i >= 0; i-- {
+// 		blockHash := newChain[i]
+// 		blockRLP, err := backend.BlockByHash(context.Background(), blockHash)
+// 		if err != nil {
+// 			log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
+// 			return
+// 		}
+// 		var block types.Block
+// 		if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
+// 			log.Error("Could not decode block during reorg", "hash", blockHash, "err", err)
+// 			return
+// 		}
+// 		td := backend.GetTd(context.Background(), blockHash)
+// 		newHead(block, blockHash, td)
+// 	}
+// 	fnList = pl.Lookup("BUPostReorg", func(item interface{}) bool {
+// 		_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
+// 		return ok
+// 	})
+// 	for _, fni := range fnList {
+// 		if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
+// 			fn(common, oldChain, newChain)
+// 		}
+// 	}
+// }
 
 
 // BlockUpdates is a service that lets clients query for block updates for a
