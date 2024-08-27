@@ -260,7 +260,6 @@ func (*BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs ma
 // TODO: We're not necessarily handling reorgs properly, which may result in
 // some blocks not being emitted through this hook.
 func (*BlockUpdates) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
-	log.Error("INSIDE OF NEWW HEAD")
 	// newHead(block, hash, td)
 }
 // func newHead(block types.Block, hash core.Hash, td *big.Int) {
@@ -342,32 +341,26 @@ func (*BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain 
 
 // BlockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
+func BlockUpdatesByNumber(number rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
+	block, err := backend.BlockByNumber(context.Background(), number)
+	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
-// func BlockUpdatesByNumber(number int64) (*types.Block, *big.Int, types.Receipts, map[core.Hash]struct{}, map[core.Hash][]byte, map[core.Hash]map[core.Hash][]byte, map[core.Hash][]byte, error) {
-// 	blockBytes, err := backend.BlockByNumber(context.Background(), int64(number))
-// 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
-// 	var block types.Block
-// 	if err := rlp.DecodeBytes(blockBytes, &block); err != nil {
-// 		return nil, nil, nil, nil, nil, nil, nil, err
-// 	}
-// 	td := backend.GetTd(context.Background(), block.Hash())
-// 	receiptBytes, err := backend.GetReceipts(context.Background(), block.Hash())
-// 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
-// 	var receipts types.Receipts
-// 	if err := json.Unmarshal(receiptBytes, &receipts); err != nil {
-// 		return nil, nil, nil, nil, nil, nil, nil, err
-// 	}
-// 	var su *stateUpdate
-// 	if v, ok := cache.Get(block.Root()); ok {
-// 		su = v.(*stateUpdate)
-// 	} else {
-// 		su = new(stateUpdate)
-// 		data, err := backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
-// 		if err != nil { return &block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
-// 		if err := rlp.DecodeBytes(data, su); err != nil { return &block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
-// 	}
-// 	return &block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code, nil
-// }
+	td := backend.GetTd(context.Background(), block.Hash())
+
+	receipts, err := backend.GetReceipts(context.Background(), block.Hash())
+	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
+
+	var su *stateUpdate
+	if v, ok := cache.Get(block.Root()); ok {
+		su = v.(*stateUpdate)
+	} else {
+		su = new(stateUpdate)
+		data, err := backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
+		if err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
+		if err := rlp.DecodeBytes(data, su); err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
+	}
+	return block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code, nil
+}
 
 // blockUpdate handles the serialization of a block
 func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interface{}, error)	{
