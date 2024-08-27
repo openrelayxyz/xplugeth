@@ -160,6 +160,8 @@ func (su *stateUpdate) DecodeRLP(s *rlp.Stream) error {
 
 type externalPlugins interface {
 	BlockUpdates(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte)
+	BUPreReorg(common.Hash, []common.Hash, []common.Hash)
+	BUPostReorg(common.Hash, []common.Hash, []common.Hash)
 }
 
 // var (
@@ -300,41 +302,26 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 	recentEmits.Add(hash, struct{}{})
 }
 
-// func (*BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
-// 	fnList := pl.Lookup("BUPreReorg", func(item interface{}) bool {
-// 		_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
-// 		return ok
-// 	})
-// 	for _, fni := range fnList {
-// 		if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
-// 			fn(common, oldChain, newChain)
-// 		}
-// 	}
-// 	for i := len(newChain) - 1; i >= 0; i-- {
-// 		blockHash := newChain[i]
-// 		blockRLP, err := backend.BlockByHash(context.Background(), blockHash)
-// 		if err != nil {
-// 			log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
-// 			return
-// 		}
-// 		var block types.Block
-// 		if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
-// 			log.Error("Could not decode block during reorg", "hash", blockHash, "err", err)
-// 			return
-// 		}
-// 		td := backend.GetTd(context.Background(), blockHash)
-// 		newHead(block, blockHash, td)
-// 	}
-// 	fnList = pl.Lookup("BUPostReorg", func(item interface{}) bool {
-// 		_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
-// 		return ok
-// 	})
-// 	for _, fni := range fnList {
-// 		if fn, ok := fni.(func(core.Hash, []core.Hash, []core.Hash)); ok {
-// 			fn(common, oldChain, newChain)
-// 		}
-// 	}
-// }
+func (bu *BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+	for _, extern := range xplugeth.GetModules[externalPlugins]() {
+		extern.BUPreReorg(common, oldChain, newChain)
+	}
+
+	for i := len(newChain) - 1; i >= 0; i-- {
+		blockHash := newChain[i]
+		block, err := bu.backend.BlockByHash(context.Background(), blockHash)
+		if err != nil {
+			log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
+			return
+		}
+		td := bu.backend.GetTd(context.Background(), blockHash)
+		newHead(*block, blockHash, td)
+	}
+
+	for _, extern := range xplugeth.GetModules[externalPlugins]() {
+		extern.BUPostReorg(common, oldChain, newChain)
+	}
+}
 
 
 // BlockUpdates is a service that lets clients query for block updates for a
@@ -432,17 +419,4 @@ func (*BlockUpdates) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API 
 		 Public:		true,
 	 },
  }
-}
-
-func (bu *BlockUpdates) Blockchain() {
-	be := bu.backend 
-	log.Error("inside of blockchain", "backend", be)
-}
-
-func (bu *BlockUpdates) TestBU(context.Context) string {
-	var b bool
-	if bu.backend != nil {
-		b = true
-	}
-	return fmt.Sprintf("BlockUpdates module value: backend is not nil = %v", b)
 }
