@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -26,13 +27,13 @@ import (
 
 
 var (
-	backend types.Backend
+	sessionBackend types.Backend
 // 	lastBlock core.Hash
 	cache *lru.Cache
 	recentEmits *lru.Cache
 // 	snapshotFlagName = "snapshot"
 // 	log core.Logger
-// 	blockEvents core.Feed
+	blockEvents *event.Feed
 	suCh chan *stateUpdateWithRoot
 )
 
@@ -157,6 +158,10 @@ func (su *stateUpdate) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+func NewFeed() *event.Feed {
+	return &event.Feed{}
+}
+
 // var (
 // 	httpApiFlagName = "http.api"
 // 	wsApiFlagName = "ws.api"
@@ -210,7 +215,8 @@ func init() {
 // useful information.
 func (bu *BlockUpdates) InitializeNode(stack *node.Node, b types.Backend) {
 	bu.backend = b
-	backend = b
+	sessionBackend = b
+	blockEvents = NewFeed()
 	cache, _ = lru.New(128)
 	log.Error("Initialized node block updater plugin")
 }
@@ -218,8 +224,8 @@ func (bu *BlockUpdates) InitializeNode(stack *node.Node, b types.Backend) {
 
 // // StateUpdate gives us updates about state changes made in each block. We
 // // cache them for short term use, and write them to disk for the longer term.
-func (*BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
-	if backend == nil {
+func (bu *BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
+	if bu.backend == nil {
 		log.Warn("State update called before InitializeNode", "root", blockRoot)
 		return
 	}
@@ -260,48 +266,44 @@ func (*BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs ma
 // TODO: We're not necessarily handling reorgs properly, which may result in
 // some blocks not being emitted through this hook.
 func (*BlockUpdates) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
-	// newHead(block, hash, td)
+	newHead(*block, hash, td)
 }
-// func newHead(block types.Block, hash core.Hash, td *big.Int) {
-// 	if recentEmits.Contains(hash) {
-// 		log.Debug("Skipping recently emitted block")
-// 		return
-// 	}
-// 	result, err := blockUpdates(context.Background(), &block)
-// 	if err != nil {
-// 		log.Error("Could not serialize block", "err", err, "hash", block.Hash())
-// 		return
-// 	}
-// 	if recentEmits.Len() > 10 && !recentEmits.Contains(block.ParentHash()) {
-// 		blockRLP, err := backend.BlockByHash(context.Background(), block.ParentHash())
-// 		if err != nil {
-// 			log.Error("Could not get block for reorg", "hash", block.ParentHash(), "err", err)
-// 			return
-// 		}
-// 		var parentBlock types.Block
-// 		if err := rlp.DecodeBytes(blockRLP, &parentBlock); err != nil {
-// 			log.Error("Could not decode block during reorg", "hash", block.ParentHash(), "err", err)
-// 			return
-// 		}
-// 		td := backend.GetTd(context.Background(), parentBlock.Hash())
-// 		newHead(parentBlock, block.Hash(), td)
-// 	}
-// 	blockEvents.Send(result)
+func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
+	if recentEmits.Contains(hash) {
+		log.Debug("Skipping recently emitted block")
+		return
+	}
+	result, err := blockUpdates(context.Background(), &block)
+	if err != nil {
+		log.Error("Could not serialize block", "err", err, "hash", block.Hash())
+		return
+	}
+	if recentEmits.Len() > 10 && !recentEmits.Contains(block.ParentHash()) {
+		parentBlock, err := sessionBackend.BlockByHash(context.Background(), hash)
+		if err != nil {
+				log.Error("Could not decode block during reorg", "hash", hash, "err", err)
+				return
+			}
+		td := sessionBackend.GetTd(context.Background(), parentBlock.Hash())
+		newHead(*parentBlock, block.Hash(), td)
+	}
+	blockEvents.Send(result)
 
-// 	receipts := result["receipts"].(types.Receipts)
-// 	su := result["stateUpdates"].(*stateUpdate)
-// 	fnList := pl.Lookup("BlockUpdates", func(item interface{}) bool {
-// 		_, ok := item.(func(*types.Block, *big.Int, types.Receipts, map[core.Hash]struct{}, map[core.Hash][]byte, map[core.Hash]map[core.Hash][]byte, map[core.Hash][]byte))
-// 		log.Info("Found BlockUpdates hook", "matches", ok)
-// 		return ok
-// 	})
-// 	for _, fni := range fnList {
-// 		if fn, ok := fni.(func(*types.Block, *big.Int, types.Receipts, map[core.Hash]struct{}, map[core.Hash][]byte, map[core.Hash]map[core.Hash][]byte, map[core.Hash][]byte)); ok {
-// 			fn(&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code)
-// 		}
-// 	}
-// 	recentEmits.Add(hash, struct{}{})
-// }
+	// receipts := result["receipts"].(types.Receipts)
+	// su := result["stateUpdates"].(*stateUpdate)
+	// TODO Philip need to address the following
+	// fnList := pl.Lookup("BlockUpdates", func(item interface{}) bool {
+	// 	_, ok := item.(func(*types.Block, *big.Int, types.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte))
+	// 	log.Info("Found BlockUpdates hook", "matches", ok)
+	// 	return ok
+	// })
+	// for _, fni := range fnList {
+	// 	if fn, ok := fni.(func(*types.Block, *big.Int, types.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte)); ok {
+	// 		fn(&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code)
+	// 	}
+	// }
+	recentEmits.Add(hash, struct{}{})
+}
 func (*BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
 	// fnList := pl.Lookup("BUPreReorg", func(item interface{}) bool {
 	// 	_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
@@ -342,12 +344,12 @@ func (*BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain 
 // BlockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
 func BlockUpdatesByNumber(number rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
-	block, err := backend.BlockByNumber(context.Background(), number)
+	block, err := sessionBackend.BlockByNumber(context.Background(), number)
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
-	td := backend.GetTd(context.Background(), block.Hash())
+	td := sessionBackend.GetTd(context.Background(), block.Hash())
 
-	receipts, err := backend.GetReceipts(context.Background(), block.Hash())
+	receipts, err := sessionBackend.GetReceipts(context.Background(), block.Hash())
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
 	var su *stateUpdate
@@ -355,7 +357,7 @@ func BlockUpdatesByNumber(number rpc.BlockNumber) (*gtypes.Block, *big.Int, gtyp
 		su = v.(*stateUpdate)
 	} else {
 		su = new(stateUpdate)
-		data, err := backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
+		data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 		if err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
 		if err := rlp.DecodeBytes(data, su); err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
 	}
@@ -366,13 +368,13 @@ func BlockUpdatesByNumber(number rpc.BlockNumber) (*gtypes.Block, *big.Int, gtyp
 func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interface{}, error)	{
 	result, err := RPCMarshalBlock(block, true, true)
 	if err != nil { return nil, err }
-	result["receipts"], err = backend.GetReceipts(ctx, block.Hash())
+	result["receipts"], err = sessionBackend.GetReceipts(ctx, block.Hash())
 	if err != nil { return nil, err }
 	if v, ok := cache.Get(block.Root()); ok {
 		result["stateUpdates"] = v
 		return result, nil
 	}
-	data, err := backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
+	data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 	if err != nil { return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())}
 	log.Error("its the second one")
 	su := &stateUpdate{}
@@ -398,29 +400,29 @@ func (b *BlockUpdates) BlockUpdatesByHash(ctx context.Context, hash common.Hash)
 }
 
 
-// // BlockUpdates allows clients to subscribe to notifications of new blocks
-// // along with receipts and state updates.
-// func (b *BlockUpdates) BlockUpdates(ctx context.Context) (<-chan map[string]interface{}, error) {
-// 	blockDataChan := make(chan map[string]interface{}, 1000)
-// 	ch := make(chan map[string]interface{}, 1000)
-// 	sub := blockEvents.Subscribe(blockDataChan)
-// 	go func() {
-// 		log.Info("BlockUpdates subscription setup")
-// 		defer log.Info("BlockUpdates subscription closed")
-// 		for {
-// 			select {
-// 			case <-ctx.Done():
-// 				sub.Unsubscribe()
-// 				close(ch)
-// 				close(blockDataChan)
-// 				return
-// 			case b := <-blockDataChan:
-// 				ch <- b
-// 			}
-// 		}
-// 	}()
-// 	return ch, nil
-// }
+// BlockUpdates allows clients to subscribe to notifications of new blocks
+// along with receipts and state updates.
+func (b *BlockUpdates) BlockUpdates(ctx context.Context) (<-chan map[string]interface{}, error) {
+	blockDataChan := make(chan map[string]interface{}, 1000)
+	ch := make(chan map[string]interface{}, 1000)
+	sub := blockEvents.Subscribe(blockDataChan)
+	go func() {
+		log.Info("BlockUpdates subscription setup")
+		defer log.Info("BlockUpdates subscription closed")
+		for {
+			select {
+			case <-ctx.Done():
+				sub.Unsubscribe()
+				close(ch)
+				close(blockDataChan)
+				return
+			case b := <-blockDataChan:
+				ch <- b
+			}
+		}
+	}()
+	return ch, nil
+}
 
 
 // GetAPIs exposes the BlockUpdates service under the cardinal namespace.
