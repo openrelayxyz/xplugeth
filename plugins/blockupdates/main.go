@@ -4,19 +4,19 @@ import (
 	"fmt"
 	// "strings"
 	// "bytes"
-	// "fmt"
+	"io"
 	"context"
 	// "time"
-	// "encoding/json"
+	"encoding/json"
 	"math/big"
 	lru "github.com/hashicorp/golang-lru"
 	
-	// "io"
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
 	
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
@@ -50,107 +50,112 @@ type stateUpdateWithRoot struct {
 	root common.Hash
 }
 
-
-// // kvpair is used for RLP encoding of maps, as maps cannot be RLP encoded directly
-// type kvpair struct {
-// 	Key core.Hash
-// 	Value []byte
-// }
-
-// // storage is used for RLP encoding two layers of maps, as maps cannot be RLP encoded directly
-// type storage struct {
-// 	Account core.Hash
-// 	Data []kvpair
-// }
-
-// // storedStateUpdate is an RLP encodable version of stateUpdate
-// type storedStateUpdate struct {
-// 	Destructs []core.Hash
-// 	Accounts	[]kvpair
-// 	Storage	 []storage
-// 	Code	[]kvpair
-// }
+type BlockUpdates struct{
+	backend types.Backend
+}
 
 
-// // MarshalJSON represents the stateUpdate as JSON for RPC calls
-// func (su *stateUpdate) MarshalJSON() ([]byte, error) {
-// 	result := make(map[string]interface{})
-// 	destructs := make([]core.Hash, 0, len(su.Destructs))
-// 	for k := range su.Destructs {
-// 		destructs = append(destructs, k)
-// 	}
-// 	result["destructs"] = destructs
-// 	accounts := make(map[string]hexutil.Bytes)
-// 	for k, v := range su.Accounts {
-// 		accounts[k.String()] = hexutil.Bytes(v)
-// 	}
-// 	result["accounts"] = accounts
-// 	storage := make(map[string]map[string]hexutil.Bytes)
-// 	for m, s := range su.Storage {
-// 		storage[m.String()] = make(map[string]hexutil.Bytes)
-// 		for k, v := range s {
-// 			storage[m.String()][k.String()] = hexutil.Bytes(v)
-// 		}
-// 	}
-// 	result["storage"] = storage
-// 	code := make(map[string]hexutil.Bytes)
-// 	for k, v := range su.Code {
-// 		code[k.String()] = hexutil.Bytes(v)
-// 	}
-// 	result["code"] = code
-// 	return json.Marshal(result)
-// }
 
-// // EncodeRLP converts the stateUpdate to a storedStateUpdate, and RLP encodes the result for storage
-// func (su *stateUpdate) EncodeRLP(w io.Writer) error {
-// 	destructs := make([]core.Hash, 0, len(su.Destructs))
-// 	for k := range su.Destructs {
-// 		destructs = append(destructs, k)
-// 	}
-// 	accounts := make([]kvpair, 0, len(su.Accounts))
-// 	for k, v := range su.Accounts {
-// 		accounts = append(accounts, kvpair{k, v})
-// 	}
-// 	s := make([]storage, 0, len(su.Storage))
-// 	for a, m := range su.Storage {
-// 		accountStorage := storage{a, make([]kvpair, 0, len(m))}
-// 		for k, v := range m {
-// 			accountStorage.Data = append(accountStorage.Data, kvpair{k, v})
-// 		}
-// 		s = append(s, accountStorage)
-// 	}
-// 	code := make([]kvpair, 0, len(su.Code))
-// 	for k, v := range su.Code {
-// 		code = append(code, kvpair{k, v})
-// 	}
-// 	return rlp.Encode(w, storedStateUpdate{destructs, accounts, s, code})
-// }
+// kvpair is used for RLP encoding of maps, as maps cannot be RLP encoded directly
+type kvpair struct {
+	Key common.Hash
+	Value []byte
+}
 
-// // DecodeRLP takes a byte stream, decodes it to a storedStateUpdate, the n converts that into a stateUpdate object
-// func (su *stateUpdate) DecodeRLP(s *rlp.Stream) error {
-// 	ssu := storedStateUpdate{}
-// 	if err := s.Decode(&ssu); err != nil { return err }
-// 	su.Destructs = make(map[core.Hash]struct{})
-// 	for _, s := range ssu.Destructs {
-// 		su.Destructs[s] = struct{}{}
-// 	}
-// 	su.Accounts = make(map[core.Hash][]byte)
-// 	for _, kv := range ssu.Accounts {
-// 		su.Accounts[kv.Key] = kv.Value
-// 	}
-// 	su.Storage = make(map[core.Hash]map[core.Hash][]byte)
-// 	for _, s := range ssu.Storage {
-// 		su.Storage[s.Account] = make(map[core.Hash][]byte)
-// 		for _, kv := range s.Data {
-// 			su.Storage[s.Account][kv.Key] = kv.Value
-// 		}
-// 	}
-// 	su.Code = make(map[core.Hash][]byte)
-// 	for _, kv := range ssu.Code {
-// 		su.Code[kv.Key] = kv.Value
-// 	}
-// 	return nil
-// }
+// storage is used for RLP encoding two layers of maps, as maps cannot be RLP encoded directly
+type storage struct {
+	Account common.Hash
+	Data []kvpair
+}
+
+// storedStateUpdate is an RLP encodable version of stateUpdate
+type storedStateUpdate struct {
+	Destructs []common.Hash
+	Accounts	[]kvpair
+	Storage	 []storage
+	Code	[]kvpair
+}
+
+
+// MarshalJSON represents the stateUpdate as JSON for RPC calls
+func (su *stateUpdate) MarshalJSON() ([]byte, error) {
+	result := make(map[string]interface{})
+	destructs := make([]common.Hash, 0, len(su.Destructs))
+	for k := range su.Destructs {
+		destructs = append(destructs, k)
+	}
+	result["destructs"] = destructs
+	accounts := make(map[string]hexutil.Bytes)
+	for k, v := range su.Accounts {
+		accounts[k.String()] = hexutil.Bytes(v)
+	}
+	result["accounts"] = accounts
+	storage := make(map[string]map[string]hexutil.Bytes)
+	for m, s := range su.Storage {
+		storage[m.String()] = make(map[string]hexutil.Bytes)
+		for k, v := range s {
+			storage[m.String()][k.String()] = hexutil.Bytes(v)
+		}
+	}
+	result["storage"] = storage
+	code := make(map[string]hexutil.Bytes)
+	for k, v := range su.Code {
+		code[k.String()] = hexutil.Bytes(v)
+	}
+	result["code"] = code
+	return json.Marshal(result)
+}
+
+// EncodeRLP converts the stateUpdate to a storedStateUpdate, and RLP encodes the result for storage
+func (su *stateUpdate) EncodeRLP(w io.Writer) error {
+	destructs := make([]common.Hash, 0, len(su.Destructs))
+	for k := range su.Destructs {
+		destructs = append(destructs, k)
+	}
+	accounts := make([]kvpair, 0, len(su.Accounts))
+	for k, v := range su.Accounts {
+		accounts = append(accounts, kvpair{k, v})
+	}
+	s := make([]storage, 0, len(su.Storage))
+	for a, m := range su.Storage {
+		accountStorage := storage{a, make([]kvpair, 0, len(m))}
+		for k, v := range m {
+			accountStorage.Data = append(accountStorage.Data, kvpair{k, v})
+		}
+		s = append(s, accountStorage)
+	}
+	code := make([]kvpair, 0, len(su.Code))
+	for k, v := range su.Code {
+		code = append(code, kvpair{k, v})
+	}
+	return rlp.Encode(w, storedStateUpdate{destructs, accounts, s, code})
+}
+
+// DecodeRLP takes a byte stream, decodes it to a storedStateUpdate, the n converts that into a stateUpdate object
+func (su *stateUpdate) DecodeRLP(s *rlp.Stream) error {
+	ssu := storedStateUpdate{}
+	if err := s.Decode(&ssu); err != nil { return err }
+	su.Destructs = make(map[common.Hash]struct{})
+	for _, s := range ssu.Destructs {
+		su.Destructs[s] = struct{}{}
+	}
+	su.Accounts = make(map[common.Hash][]byte)
+	for _, kv := range ssu.Accounts {
+		su.Accounts[kv.Key] = kv.Value
+	}
+	su.Storage = make(map[common.Hash]map[common.Hash][]byte)
+	for _, s := range ssu.Storage {
+		su.Storage[s.Account] = make(map[common.Hash][]byte)
+		for _, kv := range s.Data {
+			su.Storage[s.Account][kv.Key] = kv.Value
+		}
+	}
+	su.Code = make(map[common.Hash][]byte)
+	for _, kv := range ssu.Code {
+		su.Code[kv.Key] = kv.Value
+	}
+	return nil
+}
 
 // var (
 // 	httpApiFlagName = "http.api"
@@ -203,16 +208,17 @@ func init() {
 // InitializeNode is invoked by the plugin loader when the node and Backend are
 // ready. We will track the backend to provide access to blocks and other
 // useful information.
-func InitializeNode(stack *node.Node, b types.Backend) {
+func (bu *BlockUpdates) InitializeNode(stack *node.Node, b types.Backend) {
+	bu.backend = b
 	backend = b
-	log.Info("Initialized node block updater plugin")
+	cache, _ = lru.New(128)
+	log.Error("Initialized node block updater plugin")
 }
 
 
 // // StateUpdate gives us updates about state changes made in each block. We
 // // cache them for short term use, and write them to disk for the longer term.
 func (*BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
-	log.Error("SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSs")
 	if backend == nil {
 		log.Warn("State update called before InitializeNode", "root", blockRoot)
 		return
@@ -297,7 +303,7 @@ func (*BlockUpdates) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtyp
 // 	}
 // 	recentEmits.Add(hash, struct{}{})
 // }
-func Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+func (*BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
 	// fnList := pl.Lookup("BUPreReorg", func(item interface{}) bool {
 	// 	_, ok := item.(func(core.Hash, []core.Hash, []core.Hash))
 	// 	return ok
@@ -336,9 +342,6 @@ func Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
 
 // BlockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
-type BlockUpdates struct{
-	backend types.Backend
-}
 
 // func BlockUpdatesByNumber(number int64) (*types.Block, *big.Int, types.Receipts, map[core.Hash]struct{}, map[core.Hash][]byte, map[core.Hash]map[core.Hash][]byte, map[core.Hash][]byte, error) {
 // 	blockBytes, err := backend.BlockByNumber(context.Background(), int64(number))
@@ -378,31 +381,28 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 	}
 	data, err := backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 	if err != nil { return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())}
+	log.Error("its the second one")
 	su := &stateUpdate{}
 	if err := rlp.DecodeBytes(data, su); err != nil { return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
 	result["stateUpdates"] = su
 	return result, nil
 }
 
-// // BlockUpdatesByNumber retrieves a block by number, gets receipts and state
-// // updates, and serializes the response.
-// func (b *BlockUpdates) BlockUpdatesByNumber(ctx context.Context, number restricted.BlockNumber) (map[string]interface{}, error) {
-// 	blockBytes, err := b.backend.BlockByNumber(ctx, int64(number))
-// 	if err != nil { return nil, err }
-// 	var block types.Block
-// 	if err := rlp.DecodeBytes(blockBytes, &block); err != nil { return nil, err }
-// 	return blockUpdates(ctx, &block)
-// }
+// BlockUpdatesByNumber retrieves a block by number, gets receipts and state
+// updates, and serializes the response.
+func (b *BlockUpdates) BlockUpdatesByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
+	block, err := b.backend.BlockByNumber(ctx, number)
+	if err != nil { return nil, err }
+	return blockUpdates(ctx, block)
+}
 
-// // BlockUpdatesByHash retrieves a block by hash, gets receipts and state
-// // updates, and serializes the response.
-// func (b *BlockUpdates) BlockUpdatesByHash(ctx context.Context, hash core.Hash) (map[string]interface{}, error) {
-// 	blockBytes, err := b.backend.BlockByHash(ctx, hash)
-// 	if err != nil { return nil, err }
-// 	var block types.Block
-// 	if err := rlp.DecodeBytes(blockBytes, &block); err != nil { return nil, err }
-// 	return blockUpdates(ctx, &block)
-// }
+// BlockUpdatesByHash retrieves a block by hash, gets receipts and state
+// updates, and serializes the response.
+func (b *BlockUpdates) BlockUpdatesByHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	block, err := b.backend.BlockByHash(ctx, hash)
+	if err != nil { return nil, err }
+	return blockUpdates(ctx, block)
+}
 
 
 // // BlockUpdates allows clients to subscribe to notifications of new blocks
@@ -432,6 +432,7 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 
 // GetAPIs exposes the BlockUpdates service under the cardinal namespace.
 func (*BlockUpdates) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+	log.Error("GETAPIS", "backend", backend)
 	return []rpc.API{
 	 {
 		 Namespace: "plugeth",
@@ -442,8 +443,9 @@ func (*BlockUpdates) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API 
  }
 }
 
-func (*BlockUpdates) Blockchain() {
-	log.Error("inside of blockchain")
+func (bu *BlockUpdates) Blockchain() {
+	be := bu.backend 
+	log.Error("inside of blockchain", "backend", be)
 }
 
 func (bu *BlockUpdates) TestBU(context.Context) string {
