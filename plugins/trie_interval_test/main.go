@@ -1,4 +1,4 @@
-package getAPIsDemo
+package trie_interval_test
 
 import (
 	"context"
@@ -17,31 +17,31 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type getAPIsDemo struct {
+type trieFlushDemo struct {
 	stack   *node.Node
 	backend types.Backend
 }
 
-func (*getAPIsDemo) InitializeNode(s *node.Node, b types.Backend) {
-	log.Info("getAPIsDemo module initialized")
+func (*trieFlushDemo) InitializeNode(s *node.Node, b types.Backend) {
+	log.Info("trieFlushDemo module initialized")
 }
 
 func init() {
-	xplugeth.RegisterModule[getAPIsDemo]()
+	xplugeth.RegisterModule[trieFlushDemo]()
 }
 
-func (*getAPIsDemo) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+func (*trieFlushDemo) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "xplugeth",
 			Version:	 "1.0",
-			Service:	 &getAPIsDemo{stack, backend},
+			Service:	 &trieFlushDemo{stack, backend},
 			Public:		true,
 		},
  	}
 }
 
-func (g *getAPIsDemo) Blockchain() {
+func (g *trieFlushDemo) Blockchain() {
 	log.Error("inside of plugin side blockchain")
 
 	// Note Jesse: Ok so this is the basic formula for testing this hook and injection. As you can see below we are utilizing the
@@ -64,7 +64,7 @@ func evaluateInitialDuration(duration time.Duration) int {
 	return d
 }
 
-func (*getAPIsDemo) SetTrieFlushIntervalClone(duration time.Duration) time.Duration {
+func (*trieFlushDemo) SetTrieFlushIntervalClone(duration time.Duration) time.Duration {
 	nodeInterval = duration 
 
 	if modifiedInterval > 0 {
@@ -74,7 +74,7 @@ func (*getAPIsDemo) SetTrieFlushIntervalClone(duration time.Duration) time.Durat
 	return duration
 }
 
-func (*getAPIsDemo) SetTrieFlushInterval(ctx context.Context, interval string) error {
+func (*trieFlushDemo) SetTrieFlushInterval(ctx context.Context, interval string) error {
 	newInterval, err := time.ParseDuration(interval)
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func (*getAPIsDemo) SetTrieFlushInterval(ctx context.Context, interval string) e
 	return nil
 }
 
-func (*getAPIsDemo) RunTest(ctx context.Context) {
+func (*trieFlushDemo) RunTest(ctx context.Context) {
 
 	callRPC()
 
