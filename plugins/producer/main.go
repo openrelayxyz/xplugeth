@@ -5,25 +5,35 @@ import (
 	"context"
 	"flag"
 	"math/big"
-	// "net"
+	"net"
 	// "net/http"
 	// "encoding/json"
 	// "bytes"
-	// "time"
+	"time"
 	// "os"
+	"strings"
 	"sync"
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
 	
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	
+	ctypes "github.com/openrelayxyz/cardinal-types"
+	"github.com/openrelayxyz/cardinal-streams/delivery"
 	"github.com/openrelayxyz/cardinal-streams/transports"
 	"github.com/openrelayxyz/cardinal-types/metrics"
+	
+	"github.com/Shopify/sarama"
+	"github.com/savaki/cloudmetrics"
+	"github.com/pubnub/go-metrics-statsd"
 )
 
 
@@ -34,17 +44,12 @@ import (
 // 	"math/big"
 // 	"net"
 // 	"time"
-// 	"github.com/Shopify/sarama"
-// 	ctypes "github.com/openrelayxyz/cardinal-types"
-// 	"github.com/openrelayxyz/cardinal-streams/delivery"
 // 	"github.com/openrelayxyz/plugeth-utils/core"
 // 	"github.com/openrelayxyz/plugeth-utils/restricted"
 // 	"github.com/openrelayxyz/plugeth-utils/restricted/rlp"
 // 	"github.com/openrelayxyz/plugeth-utils/restricted/types"
 // 	"github.com/openrelayxyz/plugeth-utils/restricted/params"
 // 	"github.com/openrelayxyz/plugeth-utils/restricted/hexutil"
-// 	"github.com/savaki/cloudmetrics"
-// 	"github.com/pubnub/go-metrics-statsd"
 // 	"strings"
 // 	"sync"
 // )
@@ -59,10 +64,6 @@ type externalPlugins interface {
 
 }
 
-func (*cardianlProducer) InitializeNode(s *node.Node, b types.Backend) {
-	log.Error("cardianlProducer module initialized")
-}
-
 func init() {
 	xplugeth.RegisterModule[cardianlProducer]()
 	xplugeth.RegisterHook[externalPlugins]()
@@ -71,22 +72,20 @@ func init() {
 
 var (
 	ready sync.WaitGroup
-	// backend restricted.Backend
-	// stack  core.Node
-	// config *params.ChainConfig
+	backend types.Backend
+	stack  *node.Node
+	config *params.ChainConfig
 	chainid int64
 	producer transports.Producer
-	// pluginLoader core.PluginLoader
 	startBlock uint64
 	pendingReorgs map[common.Hash]func()
 	gethHeightGauge = metrics.NewMajorGauge("/geth/height")
 	gethPeersGauge = metrics.NewMajorGauge("/geth/peers")
 	masterHeightGauge = metrics.NewMajorGauge("/master/height")
 	blockAgeTimer = metrics.NewMajorTimer("/geth/age")
-	// blockUpdatesByNumber func(number int64) (*types.Block, *big.Int, types.Receipts, map[core.Hash]struct{}, map[core.Hash][]byte, map[core.Hash]map[core.Hash][]byte, map[core.Hash][]byte, error)
 	blockUpdatesByNumber func(number rpc.BlockNumber)(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 
-	// addBlockHook func(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{})
+	addBlockHook func(number int64, hash, parent common.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{})
 
 	Flags = *flag.NewFlagSet("cardinal-plugin", flag.ContinueOnError)
 	txPoolTopic = Flags.String("cardinal.txpool.topic", "", "Topic for mempool transaction data")
@@ -125,12 +124,12 @@ func strPtr(x string) *string {
 	return &x
 }
 
-// func InitializeNode(s core.Node, b restricted.Backend) {
-// 	backend = b
-// 	stack = s
-// 	defer ready.Done()
-// 	config = b.ChainConfig()
-// 	chainid = config.ChainID.Int64()
+func (*cardianlProducer) InitializeNode(s *node.Node, b types.Backend) {
+	backend = b
+	stack = s
+	defer ready.Done()
+	config = b.ChainConfig()
+	chainid = config.ChainID.Int64()
 
 // 	items := pluginLoader.Lookup("CardinalAddBlockHook", func(v interface{}) bool {
 // 		_, ok := v.(func(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{}))
@@ -149,32 +148,32 @@ func strPtr(x string) *string {
 // 		}
 // 	}
 
-// 	if *defaultTopic == "" { *defaultTopic = fmt.Sprintf("cardinal-%v", chainid) }
-// 	if *blockTopic == "" { *blockTopic = fmt.Sprintf("%v-block", *defaultTopic) }
-// 	if *logTopic == "" { *logTopic = fmt.Sprintf("%v-logs", *defaultTopic) }
-// 	if *txTopic == "" { *txTopic = fmt.Sprintf("%v-tx", *defaultTopic) }
-// 	if *receiptTopic == "" { *receiptTopic = fmt.Sprintf("%v-receipt", *defaultTopic) }
-// 	if *codeTopic == "" { *codeTopic = fmt.Sprintf("%v-code", *defaultTopic) }
-// 	if *stateTopic == "" { *stateTopic = fmt.Sprintf("%v-state", *defaultTopic) }
-// 	var err error
-// 	brokers := []transports.ProducerBrokerParams{
-// 		{
-// 			URL: "ws://0.0.0.0:8555",
-// 		},
-// 	}
-// 	schema := map[string]string{
-// 		fmt.Sprintf("c/%x/a/", chainid): *stateTopic,
-// 		fmt.Sprintf("c/%x/s", chainid): *stateTopic,
-// 		fmt.Sprintf("c/%x/c/", chainid): *codeTopic,
-// 		fmt.Sprintf("c/%x/b/[0-9a-z]+/h", chainid): *blockTopic,
-// 		fmt.Sprintf("c/%x/b/[0-9a-z]+/d", chainid): *blockTopic,
-// 		fmt.Sprintf("c/%x/b/[0-9a-z]+/w", chainid): *blockTopic,
-// 		fmt.Sprintf("c/%x/b/[0-9a-z]+/u/", chainid): *blockTopic,
-// 		fmt.Sprintf("c/%x/n/", chainid): *blockTopic,
-// 		fmt.Sprintf("c/%x/b/[0-9a-z]+/t/", chainid): *txTopic,
-// 		fmt.Sprintf("c/%x/b/[0-9a-z]+/r/", chainid): *receiptTopic,
-// 		fmt.Sprintf("c/%x/b/[0-9a-z]+/l/", chainid): *logTopic,
-// 	}
+	if *defaultTopic == "" { *defaultTopic = fmt.Sprintf("cardinal-%v", chainid) }
+	if *blockTopic == "" { *blockTopic = fmt.Sprintf("%v-block", *defaultTopic) }
+	if *logTopic == "" { *logTopic = fmt.Sprintf("%v-logs", *defaultTopic) }
+	if *txTopic == "" { *txTopic = fmt.Sprintf("%v-tx", *defaultTopic) }
+	if *receiptTopic == "" { *receiptTopic = fmt.Sprintf("%v-receipt", *defaultTopic) }
+	if *codeTopic == "" { *codeTopic = fmt.Sprintf("%v-code", *defaultTopic) }
+	if *stateTopic == "" { *stateTopic = fmt.Sprintf("%v-state", *defaultTopic) }
+	var err error
+	brokers := []transports.ProducerBrokerParams{
+		{
+			URL: "ws://0.0.0.0:8555",
+		},
+	}
+	schema := map[string]string{
+		fmt.Sprintf("c/%x/a/", chainid): *stateTopic,
+		fmt.Sprintf("c/%x/s", chainid): *stateTopic,
+		fmt.Sprintf("c/%x/c/", chainid): *codeTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/h", chainid): *blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/d", chainid): *blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/w", chainid): *blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/u/", chainid): *blockTopic,
+		fmt.Sprintf("c/%x/n/", chainid): *blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/t/", chainid): *txTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/r/", chainid): *receiptTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/l/", chainid): *logTopic,
+	}
 
 // 	// Let plugins add schema updates for any values they will provide.
 // 	schemaFns := pluginLoader.Lookup("UpdateStreamsSchema", func(i interface{}) bool {
@@ -188,157 +187,152 @@ func strPtr(x string) *string {
 // 		}
 // 	}
 
-// 	if strings.HasPrefix(*brokerURL, "kafka://") {
-// 		brokers = append(brokers, transports.ProducerBrokerParams{
-// 			URL: *brokerURL,
-// 			DefaultTopic: *defaultTopic,
-// 			Schema: schema,
-// 		})
-// 	} else if strings.HasPrefix(*brokerURL, "file://") {
-// 		brokers = append(brokers, transports.ProducerBrokerParams{
-// 			URL: *brokerURL,
-// 		})
-// 	}
-// 	log.Info("Producing to brokers", "brokers", brokers, "burl", *brokerURL)
-// 	producer, err = transports.ResolveMuxProducer(
-// 		brokers,
-// 		&resumer{},
-// 	)
-// 	if err != nil { panic(err.Error()) }
-// 	if minap := *minActiveProducers; minap > 0 {
-// 		go func() {
-// 			client, err := stack.Attach()
-// 			for err != nil {
-// 				time.Sleep(500 * time.Second)
-// 				client, err = stack.Attach()
-// 			}
-// 			t := time.NewTicker(5 * time.Second)
-// 			enabled := true
-// 			for range t.C {
-// 				pc := producer.ProducerCount(time.Minute)
-// 				if  pc >= minap && !enabled {
-// 					// If there are adequate healthy producers, the flush interval should be 1 hour
-// 					var res any
-// 					client.Call(&res, "debug_setTrieFlushInterval", "1h") // We're not error checking this in case we're on a node that doesn't support this method
-// 					enabled = true
-// 				} else if pc < minap && enabled {
-// 					// If there aren't enough healthy producers, set the flush interval very high
-// 					var res any
-// 					client.Call(&res, "debug_setTrieFlushInterval", "72h") // We're not error checking this in case we're on a node that doesn't support this method
-// 					enabled = false
-// 				}
-// 				// I feel like it's useful to note the behavior of debug_setTrieFlushInterval here.
-// 				// A trie flush interval of 1 hour does not mean that the trie will be flushed every hour.
-// 				// It means that the trie will be flushed after 1 hour of time spent processing blocks.
-// 				// The intent is that if you have an unclean shutdown and a node has to start back
-// 				// up from the last trie flush, it should take no more than 1 hour of processing to
-// 				// catch back up. If it takes 500ms to process a block, and blocks come out every 12
-// 				// seconds, it will take ~24 hours to accumulate an hour of block processing, so the
-// 				// trie flush will only happen once every 24 hours. Setting the trie flush interval to
-// 				// 72 hours then means that a trie flush may only happen every couple of months, but that
-// 				// an unclean restart will take less than 72 hours to resume.
-// 				//
-// 				// Needless to say, you don't want to find yourself in that position, so it's advised to
-// 				// make sure you have multiple healthy masters if you are setting the --cardinal.min.producers
-// 				// flag
-// 			}
-// 		}()
-// 	}
-// 	if *brokerURL != "" {
-// 		go func() {
-// 			t := time.NewTicker(time.Second * 30)
-// 			defer t.Stop()
-// 			for range t.C {
-// 				gethPeersGauge.Update(int64(stack.Server().PeerCount()))
-// 			}
-// 		}()
-// 		if *statsdaddr != "" {
-// 			udpAddr, err := net.ResolveUDPAddr("udp", *statsdaddr)
-// 			if err != nil {
-// 				log.Error("Invalid Address. Statsd will not be configured.", "error", err.Error())
-// 			}
-// 			go statsd.StatsD(
-// 				metrics.MajorRegistry,
-// 				20 * time.Second,
-// 				"cardinal.geth.master",
-// 				udpAddr,
-// 			)
-// 		}
-// 		if *cloudwatchns != "" {
-// 			go cloudmetrics.Publish(metrics.MajorRegistry,
-// 				*cloudwatchns,
-// 				cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
-// 				cloudmetrics.Interval(30 * time.Second),
-// 			)
-// 		}
-// 		if *startBlockOverride > 0 {
-// 			startBlock = *startBlockOverride
-// 		} else {
-// 			v, err := producer.LatestBlockFromFeed()
-// 			if err != nil {
-// 				log.Error("Error getting start block", "err", err)
-// 			} else {
-// 				if v > 128 {
-// 					startBlock = uint64(v) - 128
-// 					log.Info("Setting start block from producer", "block", startBlock)
-// 				}
-// 			}
-// 		}
-// 		if *txPoolTopic != "" {
-// 			go func() {
-// 				// TODO: we should probably do something within Cardinal streams to
-// 				// generalize this so it's not Kafka specific and can work with other
-// 				// transports.
-// 				ch := make(chan core.NewTxsEvent, 1000)
-// 				sub := b.SubscribeNewTxsEvent(ch)
-// 				brokers, config := transports.ParseKafkaURL(strings.TrimPrefix(*brokerURL, "kafka://"))
-// 				configEntries := make(map[string]*string)
-// 				configEntries["retention.ms"] = strPtr("3600000")
-// 				if err := transports.CreateTopicIfDoesNotExist(strings.TrimPrefix(*brokerURL, "kafka://"), *txPoolTopic, 0, configEntries); err != nil {
-// 					panic(fmt.Sprintf("Could not create topic %v on broker %v: %v", *txPoolTopic, *brokerURL, err.Error()))
-// 				}
-// 				// This is about twice the size of the largest possible transaction if
-// 				// all gas in a block were zero bytes in a transaction's data. It should
-// 				// be very rare for messages to even approach this size.
-// 				config.Producer.MaxMessageBytes = 10000024
-// 				producer, err := sarama.NewAsyncProducer(brokers, config)
-// 				if err != nil {
-// 					panic(fmt.Sprintf("Could not setup producer: %v", err.Error()))
-// 				}
-// 				for {
-// 					select {
-// 					case txEvent := <-ch:
-// 						for _, txBytes := range txEvent.Txs {
-// 							// Switch from MarshalBinary to RLP encoding to match EtherCattle's legacy format for txpool transactions
-// 							tx := &types.Transaction{}
-// 							if err := tx.UnmarshalBinary(txBytes); err != nil {
-// 								log.Error("Error unmarshalling")
-// 								continue
-// 							}
-// 							txdata, err := rlp.EncodeToBytes(tx)
-// 							if err == nil {
-// 								select {
-// 								case producer.Input() <- &sarama.ProducerMessage{Topic: *txPoolTopic, Value: sarama.ByteEncoder(txdata)}:
-// 								case err := <-producer.Errors():
-// 									log.Error("Error emitting: %v", "err", err.Error())
-// 								}
-// 							} else {
-// 								log.Warn("Error RLP encoding transactions", "err", err)
-// 							}
-// 						}
-// 					case err := <-sub.Err():
-// 						log.Error("Error processing event transactions", "error", err)
-// 						close(ch)
-// 						sub.Unsubscribe()
-// 						return
-// 					}
-// 				}
-// 			}()
-// 		}
-// 	}
-// 	log.Info("Cardinal EVM plugin initialized")
+	if strings.HasPrefix(*brokerURL, "kafka://") {
+		brokers = append(brokers, transports.ProducerBrokerParams{
+			URL: *brokerURL,
+			DefaultTopic: *defaultTopic,
+			Schema: schema,
+		})
+	} else if strings.HasPrefix(*brokerURL, "file://") {
+		brokers = append(brokers, transports.ProducerBrokerParams{
+			URL: *brokerURL,
+		})
+	}
+	log.Info("Producing to brokers", "brokers", brokers, "burl", *brokerURL)
+	producer, err = transports.ResolveMuxProducer(
+		brokers,
+		&resumer{},
+	)
+	if err != nil { panic(err.Error()) }
+	if minap := *minActiveProducers; minap > 0 {
+		go func() {
+			client := stack.Attach()
+			for client == nil {
+				time.Sleep(500 * time.Second)
+				client = stack.Attach()
+			}
+			t := time.NewTicker(5 * time.Second)
+			enabled := true
+			for range t.C {
+				pc := producer.ProducerCount(time.Minute)
+				if  pc >= minap && !enabled {
+					// If there are adequate healthy producers, the flush interval should be 1 hour
+					var res any
+					client.Call(&res, "debug_setTrieFlushInterval", "1h") // We're not error checking this in case we're on a node that doesn't support this method
+					enabled = true
+				} else if pc < minap && enabled {
+					// If there aren't enough healthy producers, set the flush interval very high
+					var res any
+					client.Call(&res, "debug_setTrieFlushInterval", "72h") // We're not error checking this in case we're on a node that doesn't support this method
+					enabled = false
+				}
+				// I feel like it's useful to note the behavior of debug_setTrieFlushInterval here.
+				// A trie flush interval of 1 hour does not mean that the trie will be flushed every hour.
+				// It means that the trie will be flushed after 1 hour of time spent processing blocks.
+				// The intent is that if you have an unclean shutdown and a node has to start back
+				// up from the last trie flush, it should take no more than 1 hour of processing to
+				// catch back up. If it takes 500ms to process a block, and blocks come out every 12
+				// seconds, it will take ~24 hours to accumulate an hour of block processing, so the
+				// trie flush will only happen once every 24 hours. Setting the trie flush interval to
+				// 72 hours then means that a trie flush may only happen every couple of months, but that
+				// an unclean restart will take less than 72 hours to resume.
+				//
+				// Needless to say, you don't want to find yourself in that position, so it's advised to
+				// make sure you have multiple healthy masters if you are setting the --cardinal.min.producers
+				// flag
+			}
+		}()
+	}
+	if *brokerURL != "" {
+		go func() {
+			t := time.NewTicker(time.Second * 30)
+			defer t.Stop()
+			for range t.C {
+				gethPeersGauge.Update(int64(stack.Server().PeerCount()))
+			}
+		}()
+		if *statsdaddr != "" {
+			udpAddr, err := net.ResolveUDPAddr("udp", *statsdaddr)
+			if err != nil {
+				log.Error("Invalid Address. Statsd will not be configured.", "error", err.Error())
+			}
+			go statsd.StatsD(
+				metrics.MajorRegistry,
+				20 * time.Second,
+				"cardinal.geth.master",
+				udpAddr,
+			)
+		}
+		if *cloudwatchns != "" {
+			go cloudmetrics.Publish(metrics.MajorRegistry,
+				*cloudwatchns,
+				cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
+				cloudmetrics.Interval(30 * time.Second),
+			)
+		}
+		if *startBlockOverride > 0 {
+			startBlock = *startBlockOverride
+		} else {
+			v, err := producer.LatestBlockFromFeed()
+			if err != nil {
+				log.Error("Error getting start block", "err", err)
+			} else {
+				if v > 128 {
+					startBlock = uint64(v) - 128
+					log.Info("Setting start block from producer", "block", startBlock)
+				}
+			}
+		}
+		if *txPoolTopic != "" {
+			go func() {
+				// TODO: we should probably do something within Cardinal streams to
+				// generalize this so it's not Kafka specific and can work with other
+				// transports.
+				ch := make(chan core.NewTxsEvent, 1000)
+				sub := b.SubscribeNewTxsEvent(ch)
+				brokers, config := transports.ParseKafkaURL(strings.TrimPrefix(*brokerURL, "kafka://"))
+				configEntries := make(map[string]*string)
+				configEntries["retention.ms"] = strPtr("3600000")
+				if err := transports.CreateTopicIfDoesNotExist(strings.TrimPrefix(*brokerURL, "kafka://"), *txPoolTopic, 0, configEntries); err != nil {
+					panic(fmt.Sprintf("Could not create topic %v on broker %v: %v", *txPoolTopic, *brokerURL, err.Error()))
+				}
+				// This is about twice the size of the largest possible transaction if
+				// all gas in a block were zero bytes in a transaction's data. It should
+				// be very rare for messages to even approach this size.
+				config.Producer.MaxMessageBytes = 10000024
+				producer, err := sarama.NewAsyncProducer(brokers, config)
+				if err != nil {
+					panic(fmt.Sprintf("Could not setup producer: %v", err.Error()))
+				}
+				for {
+					select {
+					case txEvent := <-ch:
+						for _, tx := range txEvent.Txs {
+							// Switch from MarshalBinary to RLP encoding to match EtherCattle's legacy format for txpool transactions
+							txdata, err := rlp.EncodeToBytes(tx)
+							if err == nil {
+								select {
+								case producer.Input() <- &sarama.ProducerMessage{Topic: *txPoolTopic, Value: sarama.ByteEncoder(txdata)}:
+								case err := <-producer.Errors():
+									log.Error("Error emitting: %v", "err", err.Error())
+								}
+							} else {
+								log.Warn("Error RLP encoding transactions", "err", err)
+							}
+						}
+					case err := <-sub.Err():
+						log.Error("Error processing event transactions", "error", err)
+						close(ch)
+						sub.Unsubscribe()
+						return
+					}
+				}
+			}()
+		}
+	}
+	log.Info("Cardinal EVM plugin initialized")
 
-// }
+}
 
 // type receiptMeta struct {
 // 	ContractAddress core.Address
@@ -369,72 +363,74 @@ func strPtr(x string) *string {
 // 	}
 // }
 
-// type resumer struct {}
+type resumer struct {}
 
-// func (*resumer) GetBlock(ctx context.Context, number uint64) (*delivery.PendingBatch) {
-// 	block, td, receipts, destructs, accounts, storage, code, err := blockUpdatesByNumber(int64(number))
-// 	if block == nil {
-// 		log.Warn("Error retrieving block", "number", number, "err", err)
-// 		return nil
-// 	}
-// 	if destructs == nil || accounts == nil || storage == nil || code == nil {
-// 		destructs, accounts, storage, code, err = stateTrieUpdatesByNumber(int64(number))
-// 		if err != nil {
-// 			log.Warn("Could not retrieve block state", "err", err)
-// 		}
-// 	}
+func (*resumer) GetBlock(ctx context.Context, number uint64) (*delivery.PendingBatch) {
+	// block, td, receipts, destructs, accounts, storage, code, err := blockUpdatesByNumber(int64(number))
+	// if block == nil {
+	// 	log.Warn("Error retrieving block", "number", number, "err", err)
+	// 	return nil
+	// }
+	// if destructs == nil || accounts == nil || storage == nil || code == nil {
+	// 	destructs, accounts, storage, code, err = stateTrieUpdatesByNumber(int64(number))
+	// 	if err != nil {
+	// 		log.Warn("Could not retrieve block state", "err", err)
+	// 	}
+	// }
 
-// 	hash := block.Hash()
-// 	weight, updates, deletes, _, batchUpdates := getUpdates(block, td, receipts, destructs, accounts, storage, code)
-// 	// Since we're just sending a single PendingBatch, we need to merge in
-// 	// updates. Once we add support for plugins altering the above, we may
-// 	// need to handle deletes in batchUpdates.
-// 	for _, b := range batchUpdates {
-// 		for k, v := range b {
-// 			updates[k] = v
-// 		}
-// 	}
-// 	return &delivery.PendingBatch{
-// 		Number: int64(number),
-// 		Weight: weight,
-// 		ParentHash: ctypes.Hash(block.ParentHash()),
-// 		Hash: ctypes.Hash(hash),
-// 		Values: updates,
-// 		Deletes: deletes,
-// 	}
-// }
+	// hash := block.Hash()
+	// weight, updates, deletes, _, batchUpdates := getUpdates(block, td, receipts, destructs, accounts, storage, code)
+	// // Since we're just sending a single PendingBatch, we need to merge in
+	// // updates. Once we add support for plugins altering the above, we may
+	// // need to handle deletes in batchUpdates.
+	// for _, b := range batchUpdates {
+	// 	for k, v := range b {
+	// 		updates[k] = v
+	// 	}
+	// }
+	// return &delivery.PendingBatch{
+	// 	Number: int64(number),
+	// 	Weight: weight,
+	// 	ParentHash: ctypes.Hash(block.ParentHash()),
+	// 	Hash: ctypes.Hash(hash),
+	// 	Values: updates,
+	// 	Deletes: deletes,
+	// }
+	return nil
+}
 
-// func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Hash) (chan *delivery.PendingBatch, error) {
-// 	if blockUpdatesByNumber == nil {
-// 		return nil, fmt.Errorf("cannot retrieve old block updates")
-// 	}
-// 	ch := make(chan *delivery.PendingBatch)
-// 	go func() {
-// 		reset := false
-// 		defer close(ch)
-// 		for i := number; ; i++ {
-// 			if pb := r.GetBlock(ctx, i); pb != nil {
-// 				if pb.Number == int64(number) && (pb.Hash != hash) && !reset {
-// 					reset = true
-// 					if int(i) < *reorgThreshold {
-// 						i = 0
-// 					} else {
-// 						i -= uint64(*reorgThreshold)
-// 					}
-// 					continue
-// 				}
-// 				select {
-// 				case <-ctx.Done():
-// 					return
-// 				case ch <- pb:
-// 				}
-// 			} else {
-// 				return
-// 			}
-// 		}
-// 	}()
-// 	return ch, nil
-// }
+func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Hash) (chan *delivery.PendingBatch, error) {
+	// if blockUpdatesByNumber == nil {
+	// 	return nil, fmt.Errorf("cannot retrieve old block updates")
+	// }
+	// ch := make(chan *delivery.PendingBatch)
+	// go func() {
+	// 	reset := false
+	// 	defer close(ch)
+	// 	for i := number; ; i++ {
+	// 		if pb := r.GetBlock(ctx, i); pb != nil {
+	// 			if pb.Number == int64(number) && (pb.Hash != hash) && !reset {
+	// 				reset = true
+	// 				if int(i) < *reorgThreshold {
+	// 					i = 0
+	// 				} else {
+	// 					i -= uint64(*reorgThreshold)
+	// 				}
+	// 				continue
+	// 			}
+	// 			select {
+	// 			case <-ctx.Done():
+	// 				return
+	// 			case ch <- pb:
+	// 			}
+	// 		} else {
+	// 			return
+	// 		}
+	// 	}
+	// }()
+	// return ch, nil
+	return nil, nil
+}
 
 // func BUPostReorg(common core.Hash, oldChain []core.Hash, newChain []core.Hash) {
 // 	if done, ok := pendingReorgs[common]; ok {
@@ -543,16 +539,16 @@ func strPtr(x string) *string {
 // 	}
 // }
 
-// func PreTrieCommit(core.Hash) {
-// 	if producer != nil {
-// 		producer.SetHealth(false)
-// 	}
-// }
-// func PostTrieCommit(core.Hash) {
-// 	if producer != nil {
-// 		producer.SetHealth(true)
-// 	}
-// }
+func (*cardianlProducer) PreTrieCommit(common.Hash) {
+	if producer != nil {
+		producer.SetHealth(false)
+	}
+}
+func (*cardianlProducer) PostTrieCommit(common.Hash) {
+	if producer != nil {
+		producer.SetHealth(true)
+	}
+}
 
 
 type cardinalAPI struct {
