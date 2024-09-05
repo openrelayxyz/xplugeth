@@ -164,6 +164,9 @@ type externalPlugins interface {
 	BUPostReorg(common.Hash, []common.Hash, []common.Hash)
 }
 
+type parallelPlugins struct {
+}
+
 // var (
 // 	httpApiFlagName = "http.api"
 // 	wsApiFlagName = "ws.api"
@@ -171,7 +174,7 @@ type externalPlugins interface {
 
 func init() {
 	xplugeth.RegisterModule[BlockUpdates]()
-	xplugeth.RegisterModule[externalPlugins]()
+	xplugeth.RegisterModule[parallelPlugins]()
 }
 
 
@@ -222,6 +225,7 @@ func (bu *BlockUpdates) InitializeNode(stack *node.Node, b types.Backend) {
 	sessionBackend = b
 	blockEvents = &event.Feed{}
 	cache, _ = lru.New(128)
+	recentEmits, _ = lru.New(128)
 	log.Error("Initialized node block updater plugin")
 }
 
@@ -326,7 +330,7 @@ func (bu *BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newCha
 
 // BlockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
-func BlockUpdatesByNumber(number rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
+func (*parallelPlugins) BlockUpdatesByNumber(number rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
 	block, err := sessionBackend.BlockByNumber(context.Background(), number)
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
@@ -410,7 +414,7 @@ func (b *BlockUpdates) BlockUpdates(ctx context.Context) (<-chan map[string]inte
 
 // GetAPIs exposes the BlockUpdates service under the cardinal namespace.
 func (*BlockUpdates) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
-	log.Error("GETAPIS", "backend", backend)
+	log.Error("GETAPIS blockupdats")
 	return []rpc.API{
 	 {
 		 Namespace: "plugeth",
@@ -419,4 +423,12 @@ func (*BlockUpdates) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API 
 		 Public:		true,
 	 },
  }
+}
+
+func (b *BlockUpdates) BlockupdatesAPITest(context.Context) string {
+	var notNil bool 
+	if b.backend != nil {
+		notNil = true
+	}
+	return fmt.Sprintf("returning from block updates, the backend object is not nil: %v", notNil)
 }
