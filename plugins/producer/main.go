@@ -60,7 +60,7 @@ type cardianlProducer struct {
 }
 
 type externalPlugins interface {
-	BlockUpdatesByNumber(rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
+	BlockUpdatesByNumber(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 
 }
 
@@ -83,7 +83,7 @@ var (
 	gethPeersGauge = metrics.NewMajorGauge("/geth/peers")
 	masterHeightGauge = metrics.NewMajorGauge("/master/height")
 	blockAgeTimer = metrics.NewMajorTimer("/geth/age")
-	blockUpdatesByNumber func(number rpc.BlockNumber)(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
+	blockUpdatesByNumber func(number int64)(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 
 	addBlockHook func(number int64, hash, parent common.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{})
 
@@ -344,59 +344,54 @@ func (*cardianlProducer) InitializeNode(s *node.Node, b types.Backend) {
 // 	LogOffset uint
 // }
 
-// func BUPreReorg(common core.Hash, oldChain []core.Hash, newChain []core.Hash) {
-// 	blockRLP, err := backend.BlockByHash(context.Background(), common)
-// 	if err != nil {
-// 		log.Error("Could not get block for reorg", "hash", common, "err", err)
-// 		return
-// 	}
-// 	var block types.Block
-// 	if err := rlp.DecodeBytes(blockRLP, &block); err != nil {
-// 		log.Error("Could not decode block during reorg", "hash", common, "err", err)
-// 		return
-// 	}
-// 	if len(oldChain) > *reorgThreshold && len(newChain) > 0 {
-// 		pendingReorgs[common], err = producer.Reorg(int64(block.NumberU64()), ctypes.Hash(common))
-// 		if err != nil {
-// 			log.Error("Could not start producer reorg", "block", common, "num", block.NumberU64(), "err", err)
-// 		}
-// 	}
-// }
+func BUPreReorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+	block, err := backend.BlockByHash(context.Background(), common)
+	if err != nil {
+		log.Error("Could not get block for reorg", "hash", common, "err", err)
+		return
+	}
+	
+	if len(oldChain) > *reorgThreshold && len(newChain) > 0 {
+		pendingReorgs[common], err = producer.Reorg(int64(block.NumberU64()), ctypes.Hash(common))
+		if err != nil {
+			log.Error("Could not start producer reorg", "block", common, "num", block.NumberU64(), "err", err)
+		}
+	}
+}
 
 type resumer struct {}
 
 func (*resumer) GetBlock(ctx context.Context, number uint64) (*delivery.PendingBatch) {
-	// block, td, receipts, destructs, accounts, storage, code, err := blockUpdatesByNumber(int64(number))
-	// if block == nil {
-	// 	log.Warn("Error retrieving block", "number", number, "err", err)
-	// 	return nil
-	// }
-	// if destructs == nil || accounts == nil || storage == nil || code == nil {
-	// 	destructs, accounts, storage, code, err = stateTrieUpdatesByNumber(int64(number))
-	// 	if err != nil {
-	// 		log.Warn("Could not retrieve block state", "err", err)
-	// 	}
-	// }
+	block, td, receipts, destructs, accounts, storage, code, err := blockUpdatesByNumber(int64(number))
+	if block == nil {
+		log.Warn("Error retrieving block", "number", number, "err", err)
+		return nil
+	}
+	if destructs == nil || accounts == nil || storage == nil || code == nil {
+		destructs, accounts, storage, code, err = stateTrieUpdatesByNumber(int64(number))
+		if err != nil {
+			log.Warn("Could not retrieve block state", "err", err)
+		}
+	}
 
-	// hash := block.Hash()
-	// weight, updates, deletes, _, batchUpdates := getUpdates(block, td, receipts, destructs, accounts, storage, code)
-	// // Since we're just sending a single PendingBatch, we need to merge in
-	// // updates. Once we add support for plugins altering the above, we may
-	// // need to handle deletes in batchUpdates.
-	// for _, b := range batchUpdates {
-	// 	for k, v := range b {
-	// 		updates[k] = v
-	// 	}
-	// }
-	// return &delivery.PendingBatch{
-	// 	Number: int64(number),
-	// 	Weight: weight,
-	// 	ParentHash: ctypes.Hash(block.ParentHash()),
-	// 	Hash: ctypes.Hash(hash),
-	// 	Values: updates,
-	// 	Deletes: deletes,
-	// }
-	return nil
+	hash := block.Hash()
+	weight, updates, deletes, _, batchUpdates := getUpdates(block, td, receipts, destructs, accounts, storage, code)
+	// Since we're just sending a single PendingBatch, we need to merge in
+	// updates. Once we add support for plugins altering the above, we may
+	// need to handle deletes in batchUpdates.
+	for _, b := range batchUpdates {
+		for k, v := range b {
+			updates[k] = v
+		}
+	}
+	return &delivery.PendingBatch{
+		Number: int64(number),
+		Weight: weight,
+		ParentHash: ctypes.Hash(block.ParentHash()),
+		Hash: ctypes.Hash(hash),
+		Values: updates,
+		Deletes: deletes,
+	}
 }
 
 func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Hash) (chan *delivery.PendingBatch, error) {
@@ -439,7 +434,7 @@ func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Has
 // 	}
 // }
 
-// func getUpdates(block *types.Block, td *big.Int, receipts types.Receipts, destructs map[core.Hash]struct{}, accounts map[core.Hash][]byte, storage map[core.Hash]map[core.Hash][]byte, code map[core.Hash][]byte) (*big.Int, map[string][]byte, map[string]struct{}, map[string]ctypes.Hash, map[ctypes.Hash]map[string][]byte) {
+func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) (*big.Int, map[string][]byte, map[string]struct{}, map[string]ctypes.Hash, map[ctypes.Hash]map[string][]byte) {
 // 	hash := block.Hash()
 // 	headerBytes, _ := rlp.EncodeToBytes(block.Header())
 // 	updates := map[string][]byte{
@@ -537,7 +532,8 @@ func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Has
 // 			return
 // 		}
 // 	}
-// }
+	return nil, nil, nil, nil, nil
+}
 
 func (*cardianlProducer) PreTrieCommit(common.Hash) {
 	if producer != nil {
@@ -553,7 +549,7 @@ func (*cardianlProducer) PostTrieCommit(common.Hash) {
 
 type cardinalAPI struct {
 	stack   *node.Node
-	blockUpdatesByNumber func(rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
+	blockUpdatesByNumber func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 }
 
 // func (api *cardinalAPI) ReproduceBlocks(start restricted.BlockNumber, end *restricted.BlockNumber) (bool, error) {
@@ -590,7 +586,7 @@ type cardinalAPI struct {
 // }
 
 func (*cardianlProducer) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
-	var v func(rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
+	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 	for _, extern := range xplugeth.GetModules[externalPlugins]() {
 		v = extern.BlockUpdatesByNumber
 	}
