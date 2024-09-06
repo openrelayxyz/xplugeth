@@ -69,8 +69,11 @@ func (p *plugintest) InitializeNode(s *node.Node, b types.Backend) {
 	}
 
 	go func() {
-		time.Sleep(5 * time.Second)
-		p.RunTest(context.Background())
+		time.Sleep(3 * time.Second)
+		err := p.callRPC("xplugeth_runTest", nil)
+		if err != nil {
+			log.Error("Failed to run test", "error", err)
+		}
 	}()
 }
 
@@ -111,50 +114,49 @@ func (p *plugintest) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API 
 }
 
 func (p *plugintest) RunTest(ctx context.Context) {
-	err := p.SetTrieFlushInterval(ctx, "1s") // calling setTrieFlush here and from a request
+	err := p.callRPC("xplugeth_setTrieFlushInterval", []interface{}{"1s"})
+
+	time.Sleep(2 * time.Second)
+
 	if err != nil {
 		log.Error("Failed to set trie flush interval", "error", err)
-		os.Exit(1)
 	}
 
-	time.Sleep(1 * time.Second)
-
 	if modifiedInterval <= nodeInterval {
-		log.Warn("values", "nodeInterval", nodeInterval, "modified", modifiedInterval)
-		log.Error("setTrieFlush not functional")
+		log.Error("setTrieFlush not functional", "nodeInterval", nodeInterval, "modifiedInterval", modifiedInterval)
 		os.Exit(1)
 	} else {
 		log.Info("Trie flush interval test passed")
+		os.Exit(0)
 	}
 }
 
-// func (p *plugintest) AutomatedTest() {
-// 	requestBody, err := json.Marshal(map[string]interface{}{
-// 		"jsonrpc": "2.0",
-// 		"method":  "xplugeth_runTest",
-// 		"params":  []interface{}{},
-// 		"id":      1,
-// 	})
-// 	if err != nil {
-// 		log.Error("Failed to marshal request", "error", err)
-// 		return
-// 	}
+func (p *plugintest) callRPC(method string, params interface{}) error {
+	payload := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params":  params,
+		"id":      1,
+	}
 
-// 	resp, err := client.Post("http://localhost:8545", "application/json", bytes.NewBuffer(requestBody))
-// 	if err != nil {
-// 		log.Error("Failed to send request", "error", err)
-// 		return
-// 	}
-// 	defer resp.Body.Close()
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 
-// 	body, err := io.ReadAll(resp.Body)
-// 	if err != nil {
-// 		log.Error("Failed to read response", "error", err)
-// 		return
-// 	}
+	resp, err := client.Post("http://localhost:8545", "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 
-// 	log.Info("xplugeth_runTest response", "response", string(body))
-// }
+	log.Info("RPC response", "method", method, "response", string(body))
+	return nil
+}
 
 func controlDataDecompress() (map[uint64]map[string]interface{}, error) {
 	file, err := os.ReadFile("./test/core-control.json.gz")
