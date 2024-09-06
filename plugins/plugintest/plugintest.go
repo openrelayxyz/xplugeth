@@ -3,12 +3,16 @@ package plugintest
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
 	"math/big"
+	"net"
+	"net/http"
 	"os"
 	"reflect"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -16,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/shared"
 	"github.com/openrelayxyz/xplugeth/types"
@@ -24,16 +29,30 @@ import (
 type plugintest struct{}
 
 var (
-	stack           node.Node
-	controlData     = make(map[uint64]map[string]interface{})
-	stateUpdateData = make(map[uint64]map[string]interface{})
+	stack            node.Node
+	controlData      = make(map[uint64]map[string]interface{})
+	stateUpdateData  = make(map[uint64]map[string]interface{})
+	nodeInterval     time.Duration
+	modifiedInterval time.Duration
+	client           = &http.Client{Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConnsPerHost:   16,
+		MaxIdleConns:          16,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}}
 )
 
 func init() {
 	xplugeth.RegisterModule[plugintest]()
 }
 
-func (*plugintest) InitializeNode(s *node.Node, b types.Backend) {
+func (p *plugintest) InitializeNode(s *node.Node, b types.Backend) {
 	stack = *s
 	log.Info("new head module initialized")
 
@@ -48,11 +67,94 @@ func (*plugintest) InitializeNode(s *node.Node, b types.Backend) {
 	if err != nil {
 		log.Error("Failed to load control data", "error", err)
 	}
+
+	go func() {
+		time.Sleep(5 * time.Second)
+		p.RunTest(context.Background())
+	}()
 }
 
 func (*plugintest) Blockchain() {
 	shared.Blockchain(stack)
 }
+
+func (p *plugintest) SetTrieFlushIntervalClone(duration time.Duration) time.Duration {
+	nodeInterval = duration
+
+	if modifiedInterval > 0 {
+		duration = modifiedInterval
+	}
+
+	return duration
+}
+
+func (p *plugintest) SetTrieFlushInterval(ctx context.Context, interval string) error {
+	log.Error("running set trie flush")
+	newInterval, err := time.ParseDuration(interval)
+	if err != nil {
+		return err
+	}
+	modifiedInterval = newInterval
+
+	return nil
+}
+
+func (p *plugintest) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: "xplugeth",
+			Version:   "1.0",
+			Service:   p,
+			Public:    true,
+		},
+	}
+}
+
+func (p *plugintest) RunTest(ctx context.Context) {
+	err := p.SetTrieFlushInterval(ctx, "1s") // calling setTrieFlush here and from a request
+	if err != nil {
+		log.Error("Failed to set trie flush interval", "error", err)
+		os.Exit(1)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	if modifiedInterval <= nodeInterval {
+		log.Warn("values", "nodeInterval", nodeInterval, "modified", modifiedInterval)
+		log.Error("setTrieFlush not functional")
+		os.Exit(1)
+	} else {
+		log.Info("Trie flush interval test passed")
+	}
+}
+
+// func (p *plugintest) AutomatedTest() {
+// 	requestBody, err := json.Marshal(map[string]interface{}{
+// 		"jsonrpc": "2.0",
+// 		"method":  "xplugeth_runTest",
+// 		"params":  []interface{}{},
+// 		"id":      1,
+// 	})
+// 	if err != nil {
+// 		log.Error("Failed to marshal request", "error", err)
+// 		return
+// 	}
+
+// 	resp, err := client.Post("http://localhost:8545", "application/json", bytes.NewBuffer(requestBody))
+// 	if err != nil {
+// 		log.Error("Failed to send request", "error", err)
+// 		return
+// 	}
+// 	defer resp.Body.Close()
+
+// 	body, err := io.ReadAll(resp.Body)
+// 	if err != nil {
+// 		log.Error("Failed to read response", "error", err)
+// 		return
+// 	}
+
+// 	log.Info("xplugeth_runTest response", "response", string(body))
+// }
 
 func controlDataDecompress() (map[uint64]map[string]interface{}, error) {
 	file, err := os.ReadFile("./test/core-control.json.gz")
@@ -100,7 +202,7 @@ func (*plugintest) NewHead(block *gethType.Block, hash common.Hash, logs []*geth
 
 	expectedHead, exists := controlData[nbr]
 	if !exists {
-		log.Error("No expected data for block", "block", nbr)
+		log.Error("No expected data for block in NewHead", "block", nbr)
 		os.Exit(1)
 		os.Remove("./test/testDataDir")
 	}
@@ -248,7 +350,7 @@ func (*plugintest) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[
 	}
 	expectedUpdate, exists := stateUpdateData[nbr]
 	if !exists {
-		log.Error("No expected data for block", "block", nbr)
+		log.Error("No expected data for block in stateUpdate", "block", nbr)
 		os.Exit(1)
 	}
 	for k, v := range stateUpdate {
