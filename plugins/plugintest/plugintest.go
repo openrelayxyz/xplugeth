@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/openrelayxyz/xplugeth"
-	"github.com/openrelayxyz/xplugeth/shared"
 	"github.com/openrelayxyz/xplugeth/types"
 )
 
@@ -77,8 +76,45 @@ func (p *plugintest) InitializeNode(s *node.Node, b types.Backend) {
 	}()
 }
 
+func getBlockNumber() (string, error) {
+	client := stack.Attach()
+	var num string
+	if err := client.Call(&num, "eth_blockNumber"); err != nil {
+		return "", err
+	} else {
+		return num, nil
+	}
+}
+
 func (*plugintest) Blockchain() {
-	shared.Blockchain(stack)
+	log.Error("inside of blockchain function")
+	var chainCall bool
+	client := stack.Attach()
+	if err := client.Call(&chainCall, "admin_importChain", "./test/chain.gz"); err != nil {
+		log.Error("Error calling importChain from client, stack demo plugin", "err", err)
+	}
+	var blockCall string
+	if err := client.Call(&blockCall, "eth_blockNumber"); err != nil {
+		log.Error("Error calling blockNumber from client, stack demo plugin", "err", err)
+	}
+
+	blockNumber, err := hexutil.DecodeUint64(blockCall)
+	if err != nil {
+		log.Error("number decodeing error, stack demo plugin", "err", err)
+		os.Exit(1)
+	}
+
+	if chainCall != true {
+		log.Error("chain not imported", "chain", chainCall)
+		os.Exit(1)
+	}
+	if blockNumber != 2000 {
+		log.Error("blockNumber mismatch, chain not imported properly", "actual number", blockNumber)
+		os.Exit(1)
+	} else {
+		os.RemoveAll("./test/testDataDir")
+		os.Exit(0)
+	}
 }
 
 func (p *plugintest) SetTrieFlushIntervalClone(duration time.Duration) time.Duration {
@@ -189,7 +225,7 @@ func controlDataDecompress() (map[uint64]map[string]interface{}, error) {
 // }
 
 func (*plugintest) NewHead(block *gethType.Block, hash common.Hash, logs []*gethType.Log, td *big.Int) {
-	n, err := shared.GetBlockNumber(stack)
+	n, err := getBlockNumber()
 	if err != nil {
 		log.Error("error returned from getnbr, test plugin", "err", err)
 	}
@@ -337,7 +373,7 @@ func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
 	return stateObject, nil
 }
 func (*plugintest) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
-	n, err := shared.GetBlockNumber(stack)
+	n, err := getBlockNumber()
 	if err != nil {
 		log.Error("error returned from getnbr, test plugin", "err", err)
 	}
