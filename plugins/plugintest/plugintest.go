@@ -6,12 +6,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -57,14 +60,19 @@ func (p *plugintest) InitializeNode(s *node.Node, b types.Backend) {
 
 	var err error
 
+	err = copyTestResources()
+	if err != nil {
+		log.Error("failed to copy test resources")
+	}
+
 	controlData, err = controlDataDecompress()
 	if err != nil {
-		log.Error("Failed to load control data", "error", err)
+		log.Error("failed to load control data", "error", err)
 	}
 
 	stateUpdateData, err = stateDataDecompress()
 	if err != nil {
-		log.Error("Failed to load control data", "error", err)
+		log.Error("failed to load control data", "error", err)
 	}
 
 	go func() {
@@ -74,6 +82,46 @@ func (p *plugintest) InitializeNode(s *node.Node, b types.Backend) {
 			log.Error("Failed to run test", "error", err)
 		}
 	}()
+}
+
+func copyTestResources() error {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		return fmt.Errorf("failed to get current file path")
+	}
+
+	packageDir := filepath.Dir(filename)
+
+	sourceDir := filepath.Join(packageDir, "test")
+	destDir := "./test/testDataDir"
+
+	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	files, err := os.ReadDir(sourceDir)
+	if err != nil {
+		return fmt.Errorf("failed to read source directory: %w", err)
+	}
+
+	for _, file := range files {
+		if filepath.Ext((file.Name())) == ".gz" {
+			sourcePath := filepath.Join(sourceDir, file.Name())
+			destPath := filepath.Join(destDir, file.Name())
+
+			sourceData, err := os.ReadFile(sourcePath)
+			if err != nil {
+				return fmt.Errorf("failed to read source file %s: %w", file.Name(), err)
+			}
+
+			err = os.WriteFile(destPath, sourceData, 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write destination file %s: %w", file.Name(), err)
+			}
+		}
+	}
+	log.Info("Test resources copied", "from", sourceDir, "to", destDir)
+	return nil
 }
 
 func getBlockNumber() (string, error) {
@@ -90,7 +138,7 @@ func (*plugintest) Blockchain() {
 	log.Error("inside of blockchain function")
 	var chainCall bool
 	client := stack.Attach()
-	if err := client.Call(&chainCall, "admin_importChain", "./test/chain.gz"); err != nil {
+	if err := client.Call(&chainCall, "admin_importChain", "./test/testDataDir/chain.gz"); err != nil {
 		log.Error("Error calling importChain from client, stack demo plugin", "err", err)
 	}
 	var blockCall string
@@ -112,6 +160,7 @@ func (*plugintest) Blockchain() {
 		log.Error("blockNumber mismatch, chain not imported properly", "actual number", blockNumber)
 		os.Exit(1)
 	} else {
+		log.Info("clear test directory")
 		os.RemoveAll("./test/testDataDir")
 		os.Exit(0)
 	}
@@ -195,7 +244,7 @@ func (p *plugintest) callRPC(method string, params interface{}) error {
 }
 
 func controlDataDecompress() (map[uint64]map[string]interface{}, error) {
-	file, err := os.ReadFile("./test/core-control.json.gz")
+	file, err := os.ReadFile("./test/testDataDir/core-control.json.gz")
 	if err != nil {
 		log.Error("cannot read file control.json.gz")
 		return nil, err
@@ -214,6 +263,28 @@ func controlDataDecompress() (map[uint64]map[string]interface{}, error) {
 	var newheadObj map[uint64]map[string]interface{}
 	json.Unmarshal(raw, &newheadObj)
 	return newheadObj, nil
+}
+
+func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
+	file, err := os.ReadFile("./test/testDataDir/control.json.gz")
+	if err != nil {
+		log.Error("cannot read file control.json.gz")
+		return nil, err
+	}
+	r, err := gzip.NewReader(bytes.NewReader(file))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	raw, err := io.ReadAll(r)
+	if err == io.EOF || err == io.ErrUnexpectedEOF {
+		return nil, err
+	}
+
+	var stateObject map[uint64]map[string]interface{}
+	json.Unmarshal(raw, &stateObject)
+	return stateObject, nil
 }
 
 // func (*plugintest) Reorg(commonBlock *gethType.Block, oldChain, newChain gethType.Blocks) {
@@ -344,34 +415,12 @@ func (*plugintest) NewHead(block *gethType.Block, hash common.Hash, logs []*geth
 			}
 		}
 	}
-
 }
 
 // func (*plugintest) NewSideBlock(block *gethType.Block, hash common.Hash, logs []*gethType.Log) {
 
 // }
 
-func stateDataDecompress() (map[uint64]map[string]interface{}, error) {
-	file, err := os.ReadFile("./test/control.json.gz")
-	if err != nil {
-		log.Error("cannot read file control.json.gz")
-		return nil, err
-	}
-	r, err := gzip.NewReader(bytes.NewReader(file))
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-
-	raw, err := io.ReadAll(r)
-	if err == io.EOF || err == io.ErrUnexpectedEOF {
-		return nil, err
-	}
-
-	var stateObject map[uint64]map[string]interface{}
-	json.Unmarshal(raw, &stateObject)
-	return stateObject, nil
-}
 func (*plugintest) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
 	n, err := getBlockNumber()
 	if err != nil {
