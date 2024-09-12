@@ -11,7 +11,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	// gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	// "github.com/openrelayxyz/plugeth-utils/core"
@@ -90,16 +93,12 @@ var (
 			db := backend.ChainDb()
 			snaprootbytes, _ := db.Get(snapRootKey)
 			snaproot := common.BytesToHash(snaprootbytes)
-			headerRLP := backend.CurrentHeader()
-			var header types.Header
-			if err := rlp.DecodeBytes(headerRLP, &header); err != nil { return err }
+			header := backend.CurrentHeader()
 			log.Info("Starting state dump", "headBlock", header.Number.Uint64(), "snaproot", snaproot)
 			for header.Root != snaproot {
 				var err error
-				headerRLP, err = backend.HeaderByNumber(context.Background(), header.Number.Int64() - 1)
+				header, err = backend.HeaderByNumber(context.Background(), rpc.BlockNumber(header.Number.Int64() - 1))
 				if err != nil { return err }
-				header = types.Header{}
-				if err := rlp.DecodeBytes(headerRLP, &header); err != nil { return err }
 			}
 			blockno := uint64(header.Number.Int64())
 			td := backend.GetTd(context.Background(), header.Hash())
@@ -115,8 +114,11 @@ var (
 				Weight: hexutil.Big(*td),
 			})
 			headerBytes, err := rlp.EncodeToBytes(header)
-			if err != nil { panic(err.Error()) }
-			jsonStream.Encode(output{Key: fmt.Sprintf("c/%x/b/%x/h", chainID, header.Hash().Bytes()), Value: hexutil.Bytes(headerBytes)})
+			if err != nil {
+				log.Error("error encoding header to bytes, producer", "err", err)
+				return err
+			}
+			jsonStream.Encode(output{Key: fmt.Sprintf("c/%x/b/%x/h", chainID, header.Hash().Bytes()), Value: headerBytes})
 			log.Info("Dumping state for block", "num", blockno, "hash", header.Hash())
 			for acctIter.Next() {
 				if len(acctIter.Key()) != 33 { continue }

@@ -127,6 +127,7 @@ func strPtr(x string) *string {
 func (*cardianlProducer) InitializeNode(s *node.Node, b types.Backend) {
 	backend = b
 	stack = s
+	ready.Add(1)
 	defer ready.Done()
 	config = b.ChainConfig()
 	chainid = config.ChainID.Int64()
@@ -552,38 +553,39 @@ type cardinalAPI struct {
 	blockUpdatesByNumber func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 }
 
-// func (api *cardinalAPI) ReproduceBlocks(start restricted.BlockNumber, end *restricted.BlockNumber) (bool, error) {
-// 	client, err := api.stack.Attach()
-// 	if err != nil {
-// 		return false, err
-// 	}
-// 	var currentBlock hexutil.Uint64
-// 	client.Call(&currentBlock, "eth_blockNumber")
-// 	fromBlock := start.Int64()
-// 	if fromBlock < 0 {
-// 		fromBlock = int64(currentBlock)
-// 	}
-// 	var toBlock int64
-// 	if end == nil {
-// 		toBlock = fromBlock
-// 	} else {
-// 		toBlock = end.Int64()
-// 	}
-// 	if toBlock < 0 {
-// 		toBlock = int64(currentBlock)
-// 	}
-// 	oldStartBlock := startBlock
-// 	startBlock = 0
-// 	for i := fromBlock; i <= toBlock; i++ {
-// 		block, td, receipts, destructs, accounts, storage, code, err := api.blockUpdatesByNumber(i)
-// 		if err != nil {
-// 			return false, err
-// 		}
-// 		BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
-// 	}
-// 	startBlock = oldStartBlock
-// 	return true, nil
-// }
+func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNumber) (bool, error) {
+	// client, err := api.stack.Attach()
+	// if err != nil {
+	// 	return false, err
+	// }
+	// var currentBlock hexutil.Uint64
+	// client.Call(&currentBlock, "eth_blockNumber")
+	// fromBlock := start.Int64()
+	// if fromBlock < 0 {
+	// 	fromBlock = int64(currentBlock)
+	// }
+	// var toBlock int64
+	// if end == nil {
+	// 	toBlock = fromBlock
+	// } else {
+	// 	toBlock = end.Int64()
+	// }
+	// if toBlock < 0 {
+	// 	toBlock = int64(currentBlock)
+	// }
+	// oldStartBlock := startBlock
+	// startBlock = 0
+	// for i := fromBlock; i <= toBlock; i++ {
+	// 	block, td, receipts, destructs, accounts, storage, code, err := api.blockUpdatesByNumber(i)
+	// 	if err != nil {
+	// 		return false, err
+	// 	}
+	// 	BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
+	// }
+	// startBlock = oldStartBlock
+	// return true, nil
+	return false, nil
+}
 
 func (*cardianlProducer) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
