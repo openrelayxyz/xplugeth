@@ -2,11 +2,8 @@ package blockupdates
 
 import (
 	"fmt"
-	// "strings"
-	// "bytes"
 	"io"
 	"context"
-	// "time"
 	"encoding/json"
 	"math/big"
 	lru "github.com/hashicorp/golang-lru"
@@ -28,11 +25,8 @@ import (
 
 var (
 	sessionBackend types.Backend
-// 	lastBlock core.Hash
 	cache *lru.Cache
 	recentEmits *lru.Cache
-// 	snapshotFlagName = "snapshot"
-// 	log core.Logger
 	blockEvents *event.Feed
 	suCh chan *stateUpdateWithRoot
 )
@@ -50,12 +44,6 @@ type stateUpdateWithRoot struct {
 	su *stateUpdate
 	root common.Hash
 }
-
-type BlockUpdates struct{
-	backend types.Backend
-}
-
-
 
 // kvpair is used for RLP encoding of maps, as maps cannot be RLP encoded directly
 type kvpair struct {
@@ -158,31 +146,46 @@ func (su *stateUpdate) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-type externalPlugins interface {
+type externalProducerBlockUpdates interface {
 	BlockUpdates(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte)
+}
+
+type externalProducerPreReorg interface {
 	BUPreReorg(common.Hash, []common.Hash, []common.Hash)
+}
+
+type externalProducerPostReorg interface {
 	BUPostReorg(common.Hash, []common.Hash, []common.Hash)
 }
 
-// var (
-// 	httpApiFlagName = "http.api"
-// 	wsApiFlagName = "ws.api"
-// )
+type externalTestPlugin interface {
+	ExternProducerTest() string
+}
+
+type blockUpdatesModule struct {
+	backend types.Backend
+}
+
+type blockUpdatesAPI struct {
+	backend types.Backend
+}
+
+func (*blockUpdatesModule) ExternUpdatesTest() string {
+	return "calling from blockUpdater"
+}
 
 func init() {
-	xplugeth.RegisterModule[BlockUpdates]()
-	xplugeth.RegisterModule[externalPlugins]()
+	xplugeth.RegisterModule[blockUpdatesModule]()
+	xplugeth.RegisterHook[externalTestPlugin]()
+	xplugeth.RegisterHook[externalProducerBlockUpdates]()
+	xplugeth.RegisterHook[externalProducerPreReorg]()
+	xplugeth.RegisterHook[externalProducerPostReorg]()
 }
 
 
 // // Initialize does initial setup of variables as the plugin is loaded.
 // func Initialize(ctx core.Context, loader core.PluginLoader, logger core.Logger) {
-// 	log = logger
-// 	pl = loader
-// 	blockEvents = pl.GetFeed()
-// 	cache, _ = lru.New(128)
-// 	recentEmits, _ = lru.New(128)
-// 	suCh = make(chan *stateUpdateWithRoot, 128)
+
 // 	if !ctx.Bool(snapshotFlagName) {
 // 		log.Warn("Snapshots are required for StateUpdate plugins, but are currently disabled. State Updates will be unavailable")
 // 	}
@@ -199,36 +202,45 @@ func init() {
 // 		ctx.Set(wsApiFlagName, v+",plugeth")
 // 	}
 // 	log.Info("Loaded block updater plugin")
-// 	go func () {
-// 		for su := range suCh {
-// 			data, err := rlp.EncodeToBytes(su.su)
-// 			if err != nil {
-// 				log.Error("Failed to encode state update", "root", su.root, "err", err)
-// 			}
-// 			if err := backend.ChainDb().Put(append([]byte("su"), su.root.Bytes()...), data); err != nil {
-// 				log.Error("Failed to store state update", "root", su.root, "err", err)
-// 			}
-// 			log.Debug("Stored state update", "root", su.root)
-// 		}
-// 	}()
+
 // }
 
 
 // InitializeNode is invoked by the plugin loader when the node and Backend are
 // ready. We will track the backend to provide access to blocks and other
 // useful information.
-func (bu *BlockUpdates) InitializeNode(stack *node.Node, b types.Backend) {
+func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) {
 	bu.backend = b
 	sessionBackend = b
 	blockEvents = &event.Feed{}
 	cache, _ = lru.New(128)
+	recentEmits, _ = lru.New(128)
+	suCh = make(chan *stateUpdateWithRoot, 128)
 	log.Error("Initialized node block updater plugin")
+
+	for _, extern := range xplugeth.GetModules[externalTestPlugin]() {
+		log.Error("from cardinal plugin", "response", extern.ExternProducerTest())
+		
+	}
+	go func () {
+		db := b.ChainDb()
+		for su := range suCh {
+			data, err := rlp.EncodeToBytes(su.su)
+			if err != nil {
+				log.Error("Failed to encode state update", "root", su.root, "err", err)
+			}
+			if err := db.Put(append([]byte("su"), su.root.Bytes()...), data); err != nil {
+				log.Error("Failed to store state update", "root", su.root, "err", err)
+			}
+			log.Debug("Stored state update", "root", su.root)
+		}
+	}()
 }
 
 
 // // StateUpdate gives us updates about state changes made in each block. We
 // // cache them for short term use, and write them to disk for the longer term.
-func (bu *BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
+func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
 	if bu.backend == nil {
 		log.Warn("State update called before InitializeNode", "root", blockRoot)
 		return
@@ -266,10 +278,10 @@ func (bu *BlockUpdates) StateUpdate(blockRoot, parentRoot common.Hash, destructs
 
 // NewHead is invoked when a new block becomes the latest recognized block. We
 // use this to notify the blockEvents channel of new blocks, as well as invoke
-// the BlockUpdates hook on downstream plugins.
+// the blockUpdates hook on downstream plugins.
 // TODO: We're not necessarily handling reorgs properly, which may result in
 // some blocks not being emitted through this hook.
-func (*BlockUpdates) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
+func (*blockUpdatesModule) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
 	newHead(*block, hash, td)
 }
 func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
@@ -295,15 +307,16 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 
 	receipts := result["receipts"].(gtypes.Receipts)
 	su := result["stateUpdates"].(*stateUpdate)
-	for _, extern := range xplugeth.GetModules[externalPlugins]() {
+	log.Debug("temp things", "things", []interface{}{&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code})
+	for _, extern := range xplugeth.GetModules[externalProducerBlockUpdates]() {
 		extern.BlockUpdates(&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code)
 	}
 	
 	recentEmits.Add(hash, struct{}{})
 }
 
-func (bu *BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
-	for _, extern := range xplugeth.GetModules[externalPlugins]() {
+func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+	for _, extern := range xplugeth.GetModules[externalProducerPreReorg]() {
 		extern.BUPreReorg(common, oldChain, newChain)
 	}
 
@@ -318,16 +331,16 @@ func (bu *BlockUpdates) Reorg(common common.Hash, oldChain []common.Hash, newCha
 		newHead(*block, blockHash, td)
 	}
 
-	for _, extern := range xplugeth.GetModules[externalPlugins]() {
+	for _, extern := range xplugeth.GetModules[externalProducerPostReorg]() {
 		extern.BUPostReorg(common, oldChain, newChain)
 	}
 }
 
 
-// BlockUpdates is a service that lets clients query for block updates for a
+// blockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
-func BlockUpdatesByNumber(number rpc.BlockNumber) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
-	block, err := sessionBackend.BlockByNumber(context.Background(), number)
+func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
+	block, err := sessionBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
 	td := sessionBackend.GetTd(context.Background(), block.Hash())
@@ -358,17 +371,23 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 		return result, nil
 	}
 	data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
-	if err != nil { return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())}
+	if err != nil { 
+		log.Error("this is error zero", "err", err)
+		return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())
+	}
 	log.Error("its the second one")
 	su := &stateUpdate{}
-	if err := rlp.DecodeBytes(data, su); err != nil { return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
+	if err := rlp.DecodeBytes(data, su); err != nil { 
+		log.Error("this is error one", "err", err)
+		return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) 
+	}
 	result["stateUpdates"] = su
 	return result, nil
 }
 
 // BlockUpdatesByNumber retrieves a block by number, gets receipts and state
 // updates, and serializes the response.
-func (b *BlockUpdates) BlockUpdatesByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
+func (b *blockUpdatesAPI) BlockUpdatesByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	block, err := b.backend.BlockByNumber(ctx, number)
 	if err != nil { return nil, err }
 	return blockUpdates(ctx, block)
@@ -376,16 +395,20 @@ func (b *BlockUpdates) BlockUpdatesByNumber(ctx context.Context, number rpc.Bloc
 
 // BlockUpdatesByHash retrieves a block by hash, gets receipts and state
 // updates, and serializes the response.
-func (b *BlockUpdates) BlockUpdatesByHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+func (b *blockUpdatesAPI) BlockUpdatesByHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	block, err := b.backend.BlockByHash(ctx, hash)
 	if err != nil { return nil, err }
 	return blockUpdates(ctx, block)
 }
 
+func (b *blockUpdatesAPI) TestBlockUpdates(ctx context.Context) string {
+	return "calling back from blockUpdates plugin"
+}
+
 
 // BlockUpdates allows clients to subscribe to notifications of new blocks
 // along with receipts and state updates.
-func (b *BlockUpdates) BlockUpdates(ctx context.Context) (<-chan map[string]interface{}, error) {
+func (b *blockUpdatesAPI) BlockUpdates(ctx context.Context) (<-chan map[string]interface{}, error) {
 	blockDataChan := make(chan map[string]interface{}, 1000)
 	ch := make(chan map[string]interface{}, 1000)
 	sub := blockEvents.Subscribe(blockDataChan)
@@ -409,13 +432,12 @@ func (b *BlockUpdates) BlockUpdates(ctx context.Context) (<-chan map[string]inte
 
 
 // GetAPIs exposes the BlockUpdates service under the cardinal namespace.
-func (*BlockUpdates) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
-	log.Error("GETAPIS", "backend", backend)
+func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	return []rpc.API{
 	 {
 		 Namespace: "plugeth",
 		 Version:	 "1.0",
-		 Service:	 &BlockUpdates{backend},
+		 Service:	 &blockUpdatesAPI{backend},
 		 Public:		true,
 	 },
  }
