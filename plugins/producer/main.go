@@ -30,6 +30,8 @@ import (
 	"github.com/openrelayxyz/cardinal-streams/delivery"
 	"github.com/openrelayxyz/cardinal-streams/transports"
 	"github.com/openrelayxyz/cardinal-types/metrics"
+
+	_ "github.com/openrelayxyz/xplugeth/plugins/blockupdates"
 	
 	"github.com/Shopify/sarama"
 	"github.com/savaki/cloudmetrics"
@@ -54,21 +56,38 @@ import (
 // 	"sync"
 // )
 
-type cardianlProducer struct {
+type cardinalProducerModule struct {
 	stack   *node.Node
 	backend types.Backend
 }
 
-type externalPlugins interface {
+type externalBlockUpdates interface {
 	BlockUpdatesByNumber(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
+}
 
+type externalAddBlock interface {
+	CardinalAddBlock(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{})
+}
+
+type externalTestPlugin interface {
+	ExternUpdatesTest() string
+}
+
+type externalStreamSchema interface {
+	UpdateStreamsSchema(map[string]string)
 }
 
 func init() {
-	xplugeth.RegisterModule[cardianlProducer]()
-	xplugeth.RegisterHook[externalPlugins]()
+	xplugeth.RegisterModule[cardinalProducerModule]()
+	xplugeth.RegisterHook[externalBlockUpdates]()
+	xplugeth.RegisterHook[externalAddBlock]()
+	xplugeth.RegisterHook[externalStreamSchema]()
+	xplugeth.RegisterHook[externalTestPlugin]()
 }
 
+func (*cardinalProducerModule) ExternProducerTest() string {
+	return "calling from caridnal producer"
+}
 
 var (
 	ready sync.WaitGroup
@@ -85,7 +104,7 @@ var (
 	blockAgeTimer = metrics.NewMajorTimer("/geth/age")
 	blockUpdatesByNumber func(number int64)(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 
-	addBlockHook func(number int64, hash, parent common.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{})
+	addBlockHook func(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{})
 
 	Flags = *flag.NewFlagSet("cardinal-plugin", flag.ContinueOnError)
 	txPoolTopic = Flags.String("cardinal.txpool.topic", "", "Topic for mempool transaction data")
@@ -105,49 +124,37 @@ var (
 )
 
 // func Initialize(ctx core.Context, loader core.PluginLoader, logger core.Logger) {
-// 	ready.Add(1)
-// 	log = logger
-// 	log.Info("Cardinal EVM plugin initializing")
-// 	pendingReorgs = make(map[core.Hash]func())
-// 	pluginLoader = loader
-// 	fnList := loader.Lookup("BlockUpdatesByNumber", func(item interface{}) bool {
-// 		_, ok := item.(func(number int64) (*types.Block, *big.Int, types.Receipts, map[core.Hash]struct{}, map[core.Hash][]byte, map[core.Hash]map[core.Hash][]byte, map[core.Hash][]byte, error))
-// 		log.Info("Found BlockUpdates hook", "matches", ok)
-// 		return ok
-// 	})
-// 	if len(fnList) > 0 {
-// 		blockUpdatesByNumber = fnList[0].(func(number int64) (*types.Block, *big.Int, types.Receipts, map[core.Hash]struct{}, map[core.Hash][]byte, map[core.Hash]map[core.Hash][]byte, map[core.Hash][]byte, error))
-// 	}
+
 // }
 
 func strPtr(x string) *string {
 	return &x
 }
 
-func (*cardianlProducer) InitializeNode(s *node.Node, b types.Backend) {
+func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	backend = b
 	stack = s
 	ready.Add(1)
 	defer ready.Done()
 	config = b.ChainConfig()
 	chainid = config.ChainID.Int64()
+	pendingReorgs = make(map[common.Hash]func())
 
-// 	items := pluginLoader.Lookup("CardinalAddBlockHook", func(v interface{}) bool {
-// 		_, ok := v.(func(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{}))
-// 		return ok
-// 	})
+	for _, updater := range xplugeth.GetModules[externalBlockUpdates]() {
+		blockUpdatesByNumber = updater.BlockUpdatesByNumber
+	}
 
-// 	addBlockFns := []func(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{}){}
-// 	for _, v := range items {
-// 		if fn, ok := v.(func(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{})); ok {
-// 			addBlockFns = append(addBlockFns, fn)
-// 		}
-// 	}
-// 	addBlockHook = func(number int64, hash, parent ctypes.Hash, td *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
-// 		for _, fn := range addBlockFns {
-// 			fn(number, hash, parent, td, updates, deletes)
-// 		}
-// 	}
+	addBlockFns := []func(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{}){}
+	for _, extern := range xplugeth.GetModules[externalAddBlock]() {
+		addBlockFns = append(addBlockFns, extern.CardinalAddBlock)
+	}
+
+	addBlockHook = func(number int64, hash, parent ctypes.Hash, td *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
+		for _, fn := range addBlockFns {
+			fn(number, hash, parent, td, updates, deletes)
+		}
+	}
+	
 
 	if *defaultTopic == "" { *defaultTopic = fmt.Sprintf("cardinal-%v", chainid) }
 	if *blockTopic == "" { *blockTopic = fmt.Sprintf("%v-block", *defaultTopic) }
@@ -176,17 +183,10 @@ func (*cardianlProducer) InitializeNode(s *node.Node, b types.Backend) {
 		fmt.Sprintf("c/%x/b/[0-9a-z]+/l/", chainid): *logTopic,
 	}
 
-// 	// Let plugins add schema updates for any values they will provide.
-// 	schemaFns := pluginLoader.Lookup("UpdateStreamsSchema", func(i interface{}) bool {
-// 		_, ok := i.(func(map[string]string))
-// 		return ok
-// 	})
-// 	for _, fni := range schemaFns {
-// 		fn, ok := fni.(func(map[string]string))
-// 		if ok {
-// 			fn(schema)
-// 		}
-// 	}
+	// Let plugins add schema updates for any values they will provide.
+	for _, extern := range xplugeth.GetModules[externalStreamSchema]() {
+		extern.UpdateStreamsSchema(schema)
+	}
 
 	if strings.HasPrefix(*brokerURL, "kafka://") {
 		brokers = append(brokers, transports.ProducerBrokerParams{
@@ -331,7 +331,12 @@ func (*cardianlProducer) InitializeNode(s *node.Node, b types.Backend) {
 			}()
 		}
 	}
-	log.Info("Cardinal EVM plugin initialized")
+	log.Error("Cardinal EVM plugin initialized")
+
+	for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
+		log.Error("from block updater", "response", updater.ExternUpdatesTest())
+		
+	}
 
 }
 
@@ -496,10 +501,11 @@ func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, dest
 
 // 	weight := new(big.Int).Set(td)
 // 	addBlockHook(block.Number().Int64(), ctypes.Hash(hash), ctypes.Hash(block.ParentHash()), weight, updates, deletes)
-// 	return weight, updates, deletes, batches, batchUpdates
-// }
+	// return weight, updates, deletes, batches, batchUpdates
+	return nil, nil, nil, nil, nil
+}
 
-// func BlockUpdates(block *types.Block, td *big.Int, receipts types.Receipts, destructs map[core.Hash]struct{}, accounts map[core.Hash][]byte, storage map[core.Hash]map[core.Hash][]byte, code map[core.Hash][]byte) {
+func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
 // 	if producer == nil {
 // 		panic("Unknown broker. Please set --cardinal.broker.url")
 // 	}
@@ -533,15 +539,14 @@ func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, dest
 // 			return
 // 		}
 // 	}
-	return nil, nil, nil, nil, nil
 }
 
-func (*cardianlProducer) PreTrieCommit(common.Hash) {
+func (*cardinalProducerModule) PreTrieCommit(common.Hash) {
 	if producer != nil {
 		producer.SetHealth(false)
 	}
 }
-func (*cardianlProducer) PostTrieCommit(common.Hash) {
+func (*cardinalProducerModule) PostTrieCommit(common.Hash) {
 	if producer != nil {
 		producer.SetHealth(true)
 	}
@@ -587,11 +592,11 @@ func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNum
 	return false, nil
 }
 
-func (*cardianlProducer) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+func (*cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
-	for _, extern := range xplugeth.GetModules[externalPlugins]() {
-		v = extern.BlockUpdatesByNumber
-	}
+	// for _, extern := range xplugeth.GetModules[externalPlugins]() {
+	// 	v = extern.BlockUpdatesByNumber
+	// }
 	if v == nil { log.Warn("Could not load BlockUpdatesByNumber. cardinal_reproduceBlocks will not be available") }
 	return []rpc.API{
 		{
