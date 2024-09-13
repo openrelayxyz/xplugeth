@@ -6,11 +6,7 @@ import (
 	"flag"
 	"math/big"
 	"net"
-	// "net/http"
-	// "encoding/json"
-	// "bytes"
 	"time"
-	// "os"
 	"strings"
 	"sync"
 
@@ -30,31 +26,15 @@ import (
 	"github.com/openrelayxyz/cardinal-streams/delivery"
 	"github.com/openrelayxyz/cardinal-streams/transports"
 	"github.com/openrelayxyz/cardinal-types/metrics"
-
-	_ "github.com/openrelayxyz/xplugeth/plugins/blockupdates"
 	
 	"github.com/Shopify/sarama"
 	"github.com/savaki/cloudmetrics"
 	"github.com/pubnub/go-metrics-statsd"
 )
 
-
-// import (
-// 	"context"
-// 	"flag"
-// 	"fmt"
-// 	"math/big"
-// 	"net"
-// 	"time"
-// 	"github.com/openrelayxyz/plugeth-utils/core"
-// 	"github.com/openrelayxyz/plugeth-utils/restricted"
-// 	"github.com/openrelayxyz/plugeth-utils/restricted/rlp"
-// 	"github.com/openrelayxyz/plugeth-utils/restricted/types"
-// 	"github.com/openrelayxyz/plugeth-utils/restricted/params"
-// 	"github.com/openrelayxyz/plugeth-utils/restricted/hexutil"
-// 	"strings"
-// 	"sync"
-// )
+import (
+	_ "github.com/openrelayxyz/xplugeth/plugins/blockupdates"
+)
 
 type cardinalProducerModule struct {
 	stack   *node.Node
@@ -107,6 +87,7 @@ var (
 	addBlockHook func(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{})
 
 	Flags = *flag.NewFlagSet("cardinal-plugin", flag.ContinueOnError)
+	testplugins = Flags.String("test-plugins", "", "trigger to log call out functions from other plugins")
 	txPoolTopic = Flags.String("cardinal.txpool.topic", "", "Topic for mempool transaction data")
 	brokerURL = Flags.String("cardinal.broker.url", "", "URL of the Cardinal Broker")
 	defaultTopic = Flags.String("cardinal.default.topic", "", "Default topic for Cardinal broker")
@@ -122,10 +103,6 @@ var (
 	cloudwatchns = Flags.String("cardinal.cloudwatch.namespace", "", "CloudWatch Namespace for cardinal metrics")
 	minActiveProducers = Flags.Uint("cardinal.min.producers", 0, "The minimum number of healthy producers for maintenance operations like state trie flush to take place")
 )
-
-// func Initialize(ctx core.Context, loader core.PluginLoader, logger core.Logger) {
-
-// }
 
 func strPtr(x string) *string {
 	return &x
@@ -333,22 +310,24 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	}
 	log.Error("Cardinal EVM plugin initialized")
 
-	for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Error("from block updater", "response", updater.ExternUpdatesTest())
-		
+	if *testplugins != "" {
+		for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
+			log.Error("from block updater", "response", updater.ExternUpdatesTest())
+			
+		}
 	}
 
 }
 
-// type receiptMeta struct {
-// 	ContractAddress core.Address
-// 	CumulativeGasUsed uint64
-// 	GasUsed uint64
-// 	LogsBloom []byte
-// 	Status uint64
-// 	LogCount uint
-// 	LogOffset uint
-// }
+type receiptMeta struct {
+	ContractAddress common.Address
+	CumulativeGasUsed uint64
+	GasUsed uint64
+	LogsBloom []byte
+	Status uint64
+	LogCount uint
+	LogOffset uint
+}
 
 func BUPreReorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
 	block, err := backend.BlockByHash(context.Background(), common)
@@ -440,68 +419,68 @@ func BUPostReorg(common common.Hash, oldChain []common.Hash, newChain []common.H
 }
 
 func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) (*big.Int, map[string][]byte, map[string]struct{}, map[string]ctypes.Hash, map[ctypes.Hash]map[string][]byte) {
-	// hash := block.Hash()
-	// headerBytes, _ := rlp.EncodeToBytes(block.Header())
-	// updates := map[string][]byte{
-	// 	fmt.Sprintf("c/%x/b/%x/h", chainid, hash.Bytes()): headerBytes,
-	// 	fmt.Sprintf("c/%x/b/%x/d", chainid, hash.Bytes()): td.Bytes(),
-	// 	fmt.Sprintf("c/%x/n/%x", chainid, block.Number().Int64()): hash[:],
-	// }
-	// if block.Withdrawals().Len() > 0 {
-	// 	withdrawalsBytes, _ := rlp.EncodeToBytes(block.Withdrawals())
-	// 	updates[fmt.Sprintf("c/%x/b/%x/w", chainid, hash.Bytes())] = withdrawalsBytes
-	// }
-	// for i, tx := range block.Transactions() {
-	// 	updates[fmt.Sprintf("c/%x/b/%x/t/%x", chainid, hash.Bytes(), i)], _ = tx.MarshalBinary()
-	// 	rmeta := receiptMeta{
-	// 		ContractAddress: core.Address(receipts[i].ContractAddress),
-	// 		CumulativeGasUsed: receipts[i].CumulativeGasUsed,
-	// 		GasUsed: receipts[i].GasUsed,
-	// 		LogsBloom: receipts[i].Bloom.Bytes(),
-	// 		Status: receipts[i].Status,
-	// 		LogCount: uint(len(receipts[i].Logs)),
-	// 	}
-	// 	if rmeta.LogCount > 0 {
-	// 		rmeta.LogOffset = receipts[i].Logs[0].Index
-	// 	}
-	// 	updates[fmt.Sprintf("c/%x/b/%x/r/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(rmeta)
-	// 	for _, logRecord := range receipts[i].Logs {
-	// 		updates[fmt.Sprintf("c/%x/b/%x/l/%x/%x", chainid, hash.Bytes(), i, logRecord.Index)], _ = rlp.EncodeToBytes(logRecord)
-	// 	}
-	// }
-	// for hashedAddr, acctRLP := range accounts {
-	// 	updates[fmt.Sprintf("c/%x/a/%x/d", chainid, hashedAddr.Bytes())] = acctRLP
-	// }
-	// for codeHash, codeBytes := range code {
-	// 	updates[fmt.Sprintf("c/%x/c/%x", chainid, codeHash.Bytes())] = codeBytes
-	// }
-	// deletes := make(map[string]struct{})
-	// for hashedAddr := range destructs {
-	// 	deletes[fmt.Sprintf("c/%x/a/%x", chainid, hashedAddr.Bytes())] = struct{}{}
-	// }
-	// batches := map[string]ctypes.Hash{
-	// 	fmt.Sprintf("c/%x/s", chainid): ctypes.BigToHash(block.Number()),
-	// }
-	// if len(block.Uncles()) > 0 {
-	// 	// If uncles == 0, we can figure that out from the hash without having to
-	// 	// send an empty list across the wire
-	// 	for i, uncle := range block.Uncles() {
-	// 		updates[fmt.Sprintf("c/%x/b/%x/u/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(uncle)
-	// 	}
-	// }
-	// batchUpdates := map[ctypes.Hash]map[string][]byte{
-	// 	ctypes.BigToHash(block.Number()): make(map[string][]byte),
-	// }
-	// for addrHash, updates := range storage {
-	// 	for k, v := range updates {
-	// 		batchUpdates[ctypes.BigToHash(block.Number())][fmt.Sprintf("c/%x/a/%x/s/%x", chainid, addrHash.Bytes(), k.Bytes())] = v
-	// 	}
-	// }
+	hash := block.Hash()
+	headerBytes, _ := rlp.EncodeToBytes(block.Header())
+	updates := map[string][]byte{
+		fmt.Sprintf("c/%x/b/%x/h", chainid, hash.Bytes()): headerBytes,
+		fmt.Sprintf("c/%x/b/%x/d", chainid, hash.Bytes()): td.Bytes(),
+		fmt.Sprintf("c/%x/n/%x", chainid, block.Number().Int64()): hash[:],
+	}
+	if block.Withdrawals().Len() > 0 {
+		withdrawalsBytes, _ := rlp.EncodeToBytes(block.Withdrawals())
+		updates[fmt.Sprintf("c/%x/b/%x/w", chainid, hash.Bytes())] = withdrawalsBytes
+	}
+	for i, tx := range block.Transactions() {
+		updates[fmt.Sprintf("c/%x/b/%x/t/%x", chainid, hash.Bytes(), i)], _ = tx.MarshalBinary()
+		rmeta := receiptMeta{
+			ContractAddress: common.Address(receipts[i].ContractAddress),
+			CumulativeGasUsed: receipts[i].CumulativeGasUsed,
+			GasUsed: receipts[i].GasUsed,
+			LogsBloom: receipts[i].Bloom.Bytes(),
+			Status: receipts[i].Status,
+			LogCount: uint(len(receipts[i].Logs)),
+		}
+		if rmeta.LogCount > 0 {
+			rmeta.LogOffset = receipts[i].Logs[0].Index
+		}
+		updates[fmt.Sprintf("c/%x/b/%x/r/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(rmeta)
+		for _, logRecord := range receipts[i].Logs {
+			updates[fmt.Sprintf("c/%x/b/%x/l/%x/%x", chainid, hash.Bytes(), i, logRecord.Index)], _ = rlp.EncodeToBytes(logRecord)
+		}
+	}
+	for hashedAddr, acctRLP := range accounts {
+		updates[fmt.Sprintf("c/%x/a/%x/d", chainid, hashedAddr.Bytes())] = acctRLP
+	}
+	for codeHash, codeBytes := range code {
+		updates[fmt.Sprintf("c/%x/c/%x", chainid, codeHash.Bytes())] = codeBytes
+	}
+	deletes := make(map[string]struct{})
+	for hashedAddr := range destructs {
+		deletes[fmt.Sprintf("c/%x/a/%x", chainid, hashedAddr.Bytes())] = struct{}{}
+	}
+	batches := map[string]ctypes.Hash{
+		fmt.Sprintf("c/%x/s", chainid): ctypes.BigToHash(block.Number()),
+	}
+	if len(block.Uncles()) > 0 {
+		// If uncles == 0, we can figure that out from the hash without having to
+		// send an empty list across the wire
+		for i, uncle := range block.Uncles() {
+			updates[fmt.Sprintf("c/%x/b/%x/u/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(uncle)
+		}
+	}
+	batchUpdates := map[ctypes.Hash]map[string][]byte{
+		ctypes.BigToHash(block.Number()): make(map[string][]byte),
+	}
+	for addrHash, updates := range storage {
+		for k, v := range updates {
+			batchUpdates[ctypes.BigToHash(block.Number())][fmt.Sprintf("c/%x/a/%x/s/%x", chainid, addrHash.Bytes(), k.Bytes())] = v
+		}
+	}
 
-	// weight := new(big.Int).Set(td)
-	// addBlockHook(block.Number().Int64(), ctypes.Hash(hash), ctypes.Hash(block.ParentHash()), weight, updates, deletes)
-	// return weight, updates, deletes, batches, batchUpdates
-	return nil, nil, nil, nil, nil
+	weight := new(big.Int).Set(td)
+	addBlockHook(block.Number().Int64(), ctypes.Hash(hash), ctypes.Hash(block.ParentHash()), weight, updates, deletes)
+	return weight, updates, deletes, batches, batchUpdates
+	// return nil, nil, nil, nil, nil
 }
 
 func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
