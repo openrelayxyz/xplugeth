@@ -401,144 +401,143 @@ func (*resumer) GetBlock(ctx context.Context, number uint64) (*delivery.PendingB
 }
 
 func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Hash) (chan *delivery.PendingBatch, error) {
-	// if blockUpdatesByNumber == nil {
-	// 	return nil, fmt.Errorf("cannot retrieve old block updates")
-	// }
-	// ch := make(chan *delivery.PendingBatch)
-	// go func() {
-	// 	reset := false
-	// 	defer close(ch)
-	// 	for i := number; ; i++ {
-	// 		if pb := r.GetBlock(ctx, i); pb != nil {
-	// 			if pb.Number == int64(number) && (pb.Hash != hash) && !reset {
-	// 				reset = true
-	// 				if int(i) < *reorgThreshold {
-	// 					i = 0
-	// 				} else {
-	// 					i -= uint64(*reorgThreshold)
-	// 				}
-	// 				continue
-	// 			}
-	// 			select {
-	// 			case <-ctx.Done():
-	// 				return
-	// 			case ch <- pb:
-	// 			}
-	// 		} else {
-	// 			return
-	// 		}
-	// 	}
-	// }()
-	// return ch, nil
-	return nil, nil
+	if blockUpdatesByNumber == nil {
+		return nil, fmt.Errorf("cannot retrieve old block updates")
+	}
+	ch := make(chan *delivery.PendingBatch)
+	go func() {
+		reset := false
+		defer close(ch)
+		for i := number; ; i++ {
+			if pb := r.GetBlock(ctx, i); pb != nil {
+				if pb.Number == int64(number) && (pb.Hash != hash) && !reset {
+					reset = true
+					if int(i) < *reorgThreshold {
+						i = 0
+					} else {
+						i -= uint64(*reorgThreshold)
+					}
+					continue
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- pb:
+				}
+			} else {
+				return
+			}
+		}
+	}()
+	return ch, nil
 }
 
-// func BUPostReorg(common core.Hash, oldChain []core.Hash, newChain []core.Hash) {
-// 	if done, ok := pendingReorgs[common]; ok {
-// 		done()
-// 		delete(pendingReorgs, common)
-// 	}
-// }
+func BUPostReorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+	if done, ok := pendingReorgs[common]; ok {
+		done()
+		delete(pendingReorgs, common)
+	}
+}
 
 func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) (*big.Int, map[string][]byte, map[string]struct{}, map[string]ctypes.Hash, map[ctypes.Hash]map[string][]byte) {
-// 	hash := block.Hash()
-// 	headerBytes, _ := rlp.EncodeToBytes(block.Header())
-// 	updates := map[string][]byte{
-// 		fmt.Sprintf("c/%x/b/%x/h", chainid, hash.Bytes()): headerBytes,
-// 		fmt.Sprintf("c/%x/b/%x/d", chainid, hash.Bytes()): td.Bytes(),
-// 		fmt.Sprintf("c/%x/n/%x", chainid, block.Number().Int64()): hash[:],
-// 	}
-// 	if block.Withdrawals().Len() > 0 {
-// 		withdrawalsBytes, _ := rlp.EncodeToBytes(block.Withdrawals())
-// 		updates[fmt.Sprintf("c/%x/b/%x/w", chainid, hash.Bytes())] = withdrawalsBytes
-// 	}
-// 	for i, tx := range block.Transactions() {
-// 		updates[fmt.Sprintf("c/%x/b/%x/t/%x", chainid, hash.Bytes(), i)], _ = tx.MarshalBinary()
-// 		rmeta := receiptMeta{
-// 			ContractAddress: core.Address(receipts[i].ContractAddress),
-// 			CumulativeGasUsed: receipts[i].CumulativeGasUsed,
-// 			GasUsed: receipts[i].GasUsed,
-// 			LogsBloom: receipts[i].Bloom.Bytes(),
-// 			Status: receipts[i].Status,
-// 			LogCount: uint(len(receipts[i].Logs)),
-// 		}
-// 		if rmeta.LogCount > 0 {
-// 			rmeta.LogOffset = receipts[i].Logs[0].Index
-// 		}
-// 		updates[fmt.Sprintf("c/%x/b/%x/r/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(rmeta)
-// 		for _, logRecord := range receipts[i].Logs {
-// 			updates[fmt.Sprintf("c/%x/b/%x/l/%x/%x", chainid, hash.Bytes(), i, logRecord.Index)], _ = rlp.EncodeToBytes(logRecord)
-// 		}
-// 	}
-// 	for hashedAddr, acctRLP := range accounts {
-// 		updates[fmt.Sprintf("c/%x/a/%x/d", chainid, hashedAddr.Bytes())] = acctRLP
-// 	}
-// 	for codeHash, codeBytes := range code {
-// 		updates[fmt.Sprintf("c/%x/c/%x", chainid, codeHash.Bytes())] = codeBytes
-// 	}
-// 	deletes := make(map[string]struct{})
-// 	for hashedAddr := range destructs {
-// 		deletes[fmt.Sprintf("c/%x/a/%x", chainid, hashedAddr.Bytes())] = struct{}{}
-// 	}
-// 	batches := map[string]ctypes.Hash{
-// 		fmt.Sprintf("c/%x/s", chainid): ctypes.BigToHash(block.Number()),
-// 	}
-// 	if len(block.Uncles()) > 0 {
-// 		// If uncles == 0, we can figure that out from the hash without having to
-// 		// send an empty list across the wire
-// 		for i, uncle := range block.Uncles() {
-// 			updates[fmt.Sprintf("c/%x/b/%x/u/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(uncle)
-// 		}
-// 	}
-// 	batchUpdates := map[ctypes.Hash]map[string][]byte{
-// 		ctypes.BigToHash(block.Number()): make(map[string][]byte),
-// 	}
-// 	for addrHash, updates := range storage {
-// 		for k, v := range updates {
-// 			batchUpdates[ctypes.BigToHash(block.Number())][fmt.Sprintf("c/%x/a/%x/s/%x", chainid, addrHash.Bytes(), k.Bytes())] = v
-// 		}
-// 	}
+	// hash := block.Hash()
+	// headerBytes, _ := rlp.EncodeToBytes(block.Header())
+	// updates := map[string][]byte{
+	// 	fmt.Sprintf("c/%x/b/%x/h", chainid, hash.Bytes()): headerBytes,
+	// 	fmt.Sprintf("c/%x/b/%x/d", chainid, hash.Bytes()): td.Bytes(),
+	// 	fmt.Sprintf("c/%x/n/%x", chainid, block.Number().Int64()): hash[:],
+	// }
+	// if block.Withdrawals().Len() > 0 {
+	// 	withdrawalsBytes, _ := rlp.EncodeToBytes(block.Withdrawals())
+	// 	updates[fmt.Sprintf("c/%x/b/%x/w", chainid, hash.Bytes())] = withdrawalsBytes
+	// }
+	// for i, tx := range block.Transactions() {
+	// 	updates[fmt.Sprintf("c/%x/b/%x/t/%x", chainid, hash.Bytes(), i)], _ = tx.MarshalBinary()
+	// 	rmeta := receiptMeta{
+	// 		ContractAddress: core.Address(receipts[i].ContractAddress),
+	// 		CumulativeGasUsed: receipts[i].CumulativeGasUsed,
+	// 		GasUsed: receipts[i].GasUsed,
+	// 		LogsBloom: receipts[i].Bloom.Bytes(),
+	// 		Status: receipts[i].Status,
+	// 		LogCount: uint(len(receipts[i].Logs)),
+	// 	}
+	// 	if rmeta.LogCount > 0 {
+	// 		rmeta.LogOffset = receipts[i].Logs[0].Index
+	// 	}
+	// 	updates[fmt.Sprintf("c/%x/b/%x/r/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(rmeta)
+	// 	for _, logRecord := range receipts[i].Logs {
+	// 		updates[fmt.Sprintf("c/%x/b/%x/l/%x/%x", chainid, hash.Bytes(), i, logRecord.Index)], _ = rlp.EncodeToBytes(logRecord)
+	// 	}
+	// }
+	// for hashedAddr, acctRLP := range accounts {
+	// 	updates[fmt.Sprintf("c/%x/a/%x/d", chainid, hashedAddr.Bytes())] = acctRLP
+	// }
+	// for codeHash, codeBytes := range code {
+	// 	updates[fmt.Sprintf("c/%x/c/%x", chainid, codeHash.Bytes())] = codeBytes
+	// }
+	// deletes := make(map[string]struct{})
+	// for hashedAddr := range destructs {
+	// 	deletes[fmt.Sprintf("c/%x/a/%x", chainid, hashedAddr.Bytes())] = struct{}{}
+	// }
+	// batches := map[string]ctypes.Hash{
+	// 	fmt.Sprintf("c/%x/s", chainid): ctypes.BigToHash(block.Number()),
+	// }
+	// if len(block.Uncles()) > 0 {
+	// 	// If uncles == 0, we can figure that out from the hash without having to
+	// 	// send an empty list across the wire
+	// 	for i, uncle := range block.Uncles() {
+	// 		updates[fmt.Sprintf("c/%x/b/%x/u/%x", chainid, hash.Bytes(), i)], _ = rlp.EncodeToBytes(uncle)
+	// 	}
+	// }
+	// batchUpdates := map[ctypes.Hash]map[string][]byte{
+	// 	ctypes.BigToHash(block.Number()): make(map[string][]byte),
+	// }
+	// for addrHash, updates := range storage {
+	// 	for k, v := range updates {
+	// 		batchUpdates[ctypes.BigToHash(block.Number())][fmt.Sprintf("c/%x/a/%x/s/%x", chainid, addrHash.Bytes(), k.Bytes())] = v
+	// 	}
+	// }
 
-// 	weight := new(big.Int).Set(td)
-// 	addBlockHook(block.Number().Int64(), ctypes.Hash(hash), ctypes.Hash(block.ParentHash()), weight, updates, deletes)
+	// weight := new(big.Int).Set(td)
+	// addBlockHook(block.Number().Int64(), ctypes.Hash(hash), ctypes.Hash(block.ParentHash()), weight, updates, deletes)
 	// return weight, updates, deletes, batches, batchUpdates
 	return nil, nil, nil, nil, nil
 }
 
 func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
-// 	if producer == nil {
-// 		panic("Unknown broker. Please set --cardinal.broker.url")
-// 	}
-// 	ready.Wait()
-// 	if block.NumberU64() < startBlock {
-// 		log.Debug("Skipping block production", "current", block.NumberU64(), "start", startBlock)
-// 		return
-// 	}
-// 	hash := block.Hash()
-// 	weight, updates, deletes, batches, batchUpdates := getUpdates(block, td, receipts, destructs, accounts, storage, code)
-// 	log.Info("Producing block to cardinal-streams", "hash", hash, "number", block.NumberU64())
-// 	gethHeightGauge.Update(block.Number().Int64())
-// 	masterHeightGauge.Update(block.Number().Int64())
-// 	producer.SetHealth(time.Since(time.Unix(int64(block.Time()), 0)) < 2 * time.Minute)
-// 	blockAgeTimer.UpdateSince(time.Unix(int64(block.Time()), 0))
-// 	if err := producer.AddBlock(
-// 		block.Number().Int64(),
-// 		ctypes.Hash(hash),
-// 		ctypes.Hash(block.ParentHash()),
-// 		weight,
-// 		updates,
-// 		deletes,
-// 		batches,
-// 	); err != nil {
-// 		log.Error("Failed to send block", "block", hash, "err", err)
-// 		panic(err.Error())
-// 	}
-// 	for batchid, update := range batchUpdates {
-// 		if err := producer.SendBatch(batchid, []string{}, update); err != nil {
-// 			log.Error("Failed to send state batch", "block", hash, "err", err)
-// 			return
-// 		}
-// 	}
+	if producer == nil {
+		panic("Unknown broker. Please set --cardinal.broker.url")
+	}
+	ready.Wait()
+	if block.NumberU64() < startBlock {
+		log.Debug("Skipping block production", "current", block.NumberU64(), "start", startBlock)
+		return
+	}
+	hash := block.Hash()
+	weight, updates, deletes, batches, batchUpdates := getUpdates(block, td, receipts, destructs, accounts, storage, code)
+	log.Info("Producing block to cardinal-streams", "hash", hash, "number", block.NumberU64())
+	gethHeightGauge.Update(block.Number().Int64())
+	masterHeightGauge.Update(block.Number().Int64())
+	producer.SetHealth(time.Since(time.Unix(int64(block.Time()), 0)) < 2 * time.Minute)
+	blockAgeTimer.UpdateSince(time.Unix(int64(block.Time()), 0))
+	if err := producer.AddBlock(
+		block.Number().Int64(),
+		ctypes.Hash(hash),
+		ctypes.Hash(block.ParentHash()),
+		weight,
+		updates,
+		deletes,
+		batches,
+	); err != nil {
+		log.Error("Failed to send block", "block", hash, "err", err)
+		panic(err.Error())
+	}
+	for batchid, update := range batchUpdates {
+		if err := producer.SendBatch(batchid, []string{}, update); err != nil {
+			log.Error("Failed to send state batch", "block", hash, "err", err)
+			return
+		}
+	}
 }
 
 func (*cardinalProducerModule) PreTrieCommit(common.Hash) {
@@ -559,44 +558,42 @@ type cardinalAPI struct {
 }
 
 func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNumber) (bool, error) {
-	// client, err := api.stack.Attach()
-	// if err != nil {
-	// 	return false, err
-	// }
-	// var currentBlock hexutil.Uint64
-	// client.Call(&currentBlock, "eth_blockNumber")
-	// fromBlock := start.Int64()
-	// if fromBlock < 0 {
-	// 	fromBlock = int64(currentBlock)
-	// }
-	// var toBlock int64
-	// if end == nil {
-	// 	toBlock = fromBlock
-	// } else {
-	// 	toBlock = end.Int64()
-	// }
-	// if toBlock < 0 {
-	// 	toBlock = int64(currentBlock)
-	// }
-	// oldStartBlock := startBlock
-	// startBlock = 0
-	// for i := fromBlock; i <= toBlock; i++ {
-	// 	block, td, receipts, destructs, accounts, storage, code, err := api.blockUpdatesByNumber(i)
-	// 	if err != nil {
-	// 		return false, err
-	// 	}
-	// 	BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
-	// }
-	// startBlock = oldStartBlock
-	// return true, nil
-	return false, nil
+	client := api.stack.Attach()
+	
+	var currentBlock int64
+	client.Call(&currentBlock, "eth_blockNumber")
+	fromBlock := start.Int64()
+	if fromBlock < 0 {
+		fromBlock = currentBlock
+	}
+	var toBlock int64
+	if end == nil {
+		toBlock = fromBlock
+	} else {
+		toBlock = end.Int64()
+	}
+	if toBlock < 0 {
+		toBlock = int64(currentBlock)
+	}
+	oldStartBlock := startBlock
+	startBlock = 0
+	for i := fromBlock; i <= toBlock; i++ {
+		block, td, receipts, destructs, accounts, storage, code, err := api.blockUpdatesByNumber(i)
+		if err != nil {
+			return false, err
+		}
+		log.Debug("the stuff", "stuff", []interface{}{block, td, receipts, destructs, accounts, storage, code})
+		// BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
+	}
+	startBlock = oldStartBlock
+	return true, nil
 }
 
 func (*cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
-	// for _, extern := range xplugeth.GetModules[externalPlugins]() {
-	// 	v = extern.BlockUpdatesByNumber
-	// }
+	for _, extern := range xplugeth.GetModules[externalBlockUpdates]() {
+		v = extern.BlockUpdatesByNumber
+	}
 	if v == nil { log.Warn("Could not load BlockUpdatesByNumber. cardinal_reproduceBlocks will not be available") }
 	return []rpc.API{
 		{
