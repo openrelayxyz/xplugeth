@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	
 
@@ -317,6 +318,9 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 // given block by hash or number, or subscribe to new block upates.
 func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
 	block, err := sessionBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
+	if block == nil {
+		return nil, nil, nil, nil, nil, nil, nil, errors.New("block not found") 
+	}
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
 	td := sessionBackend.GetTd(context.Background(), block.Hash())
