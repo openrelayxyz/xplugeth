@@ -480,7 +480,6 @@ func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, dest
 	weight := new(big.Int).Set(td)
 	addBlockHook(block.Number().Int64(), ctypes.Hash(hash), ctypes.Hash(block.ParentHash()), weight, updates, deletes)
 	return weight, updates, deletes, batches, batchUpdates
-	// return nil, nil, nil, nil, nil
 }
 
 func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
@@ -561,8 +560,14 @@ func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNum
 		if err != nil {
 			return false, err
 		}
-		log.Debug("the stuff", "stuff", []interface{}{block, td, receipts, destructs, accounts, storage, code})
-		// BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
+		for _, item := range xplugeth.GetModulesByMethodName("BlockUpdates") {
+			switch iFace := item.(type) {
+			case *cardinalProducerModule:
+				iFace.BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
+			default:
+				log.Error("internal BlockUpdates func not found, Producer, ReproduceBlocks")
+			}
+		}
 	}
 	startBlock = oldStartBlock
 	return true, nil
