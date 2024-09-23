@@ -44,15 +44,13 @@ func (*exampleModule) Shutdown() {
 }
 
 func (*exampleModule) GetAPIs(*node.Node, types.Backend) []rpc.API {
-	log.Info("Registering APIs")
+	log.Info("Registering plugin APIs")
 	return []rpc.API{
 		{
 			Namespace: "plugeth",
 			Service:   &exampleService{},
 		},
 	}
-}
-
 }
 
 type exampleService struct{}
