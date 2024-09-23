@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"math/big"
 	"errors"
+	"time"
+	"bytes"
 	lru "github.com/hashicorp/golang-lru"
 	
 
@@ -232,26 +234,26 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 	suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}
 }
 
-// // AppendAncient removes our state update records from leveldb as the
-// // corresponding blocks are moved from leveldb to the ancients database. At
-// // some point in the future, we may want to look at a way to move the state
-// // updates to an ancients table of their own for longer term retention.
-// func AppendAncient(number uint64, hash, headerBytes, body, receipts, td []byte) {
-// 	header := new(types.Header)
-// 	if err := rlp.Decode(bytes.NewReader(headerBytes), header); err != nil {
-// 		log.Warn("Could not decode ancient header", "block", number)
-// 		return
-// 	}
-// 	go func() {
-// 		// Background this so we can clean up once the backend is set, but we don't
-// 		// block the creation of the backend.
-// 		for backend == nil {
-// 			time.Sleep(250 * time.Millisecond)
-// 		}
-// 		backend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
-// 	}()
+// AppendAncient removes our state update records from leveldb as the
+// corresponding blocks are moved from leveldb to the ancients database. At
+// some point in the future, we may want to look at a way to move the state
+// updates to an ancients table of their own for longer term retention.
+func (bu *blockUpdatesModule) AppendAncient(number uint64, hash, headerBytes, body, receipts, td []byte) {
+	header := new(gtypes.Header)
+	if err := rlp.Decode(bytes.NewReader(headerBytes), header); err != nil {
+		log.Warn("Could not decode ancient header", "block", number)
+		return
+	}
+	go func() {
+		// Background this so we can clean up once the backend is set, but we don't
+		// block the creation of the backend.
+		for sessionBackend == nil {
+			time.Sleep(250 * time.Millisecond)
+		}
+		sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
+	}()
 
-// }
+}
 
 // NewHead is invoked when a new block becomes the latest recognized block. We
 // use this to notify the blockEvents channel of new blocks, as well as invoke
