@@ -3,7 +3,6 @@ package producer
 import (
 	"fmt"
 	"context"
-	"flag"
 	"math/big"
 	"net"
 	"time"
@@ -70,6 +69,7 @@ func (*cardinalProducerModule) ExternProducerTest() string {
 }
 
 var (
+	cfg *ProducerConfig
 	ready sync.WaitGroup
 	backend types.Backend
 	stack  *node.Node
@@ -85,23 +85,6 @@ var (
 	blockUpdatesByNumber func(number int64)(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 
 	addBlockHook func(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{})
-
-	Flags = *flag.NewFlagSet("cardinal-plugin", flag.ContinueOnError)
-	testplugins = Flags.String("test-plugins", "", "trigger to log call out functions from other plugins")
-	txPoolTopic = Flags.String("cardinal.txpool.topic", "", "Topic for mempool transaction data")
-	brokerURL = Flags.String("cardinal.broker.url", "", "URL of the Cardinal Broker")
-	defaultTopic = Flags.String("cardinal.default.topic", "", "Default topic for Cardinal broker")
-	blockTopic = Flags.String("cardinal.block.topic", "", "Topic for Cardinal block data")
-	logTopic = Flags.String("cardinal.logs.topic", "", "Topic for Cardinal log data")
-	txTopic = Flags.String("cardinal.tx.topic", "", "Topic for Cardinal transaction data")
-	receiptTopic = Flags.String("cardinal.receipt.topic", "", "Topic for Cardinal receipt data")
-	codeTopic = Flags.String("cardinal.code.topic", "", "Topic for Cardinal contract code")
-	stateTopic = Flags.String("cardinal.state.topic", "", "Topic for Cardinal state data")
-	startBlockOverride = Flags.Uint64("cardinal.start.block", 0, "The first block to emit")
-	reorgThreshold = Flags.Int("cardinal.reorg.threshold", 128, "The number of blocks for clients to support quick reorgs")
-	statsdaddr = Flags.String("cardinal.statsd.addr", "", "UDP address for a statsd endpoint")
-	cloudwatchns = Flags.String("cardinal.cloudwatch.namespace", "", "CloudWatch Namespace for cardinal metrics")
-	minActiveProducers = Flags.Uint("cardinal.min.producers", 0, "The minimum number of healthy producers for maintenance operations like state trie flush to take place")
 )
 
 func strPtr(x string) *string {
@@ -109,6 +92,14 @@ func strPtr(x string) *string {
 }
 
 func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
+
+	var ok bool
+	cfg, ok = xplugeth.GetConfig[ProducerConfig]("producer")
+	if !ok {
+		log.Warn("no config found producer plugin, all values set to default")
+	}
+	cfg = &ProducerConfig{ reorgThreshold:128 }
+
 	backend = b
 	stack = s
 	ready.Add(1)
@@ -133,13 +124,13 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	}
 	
 
-	if *defaultTopic == "" { *defaultTopic = fmt.Sprintf("cardinal-%v", chainid) }
-	if *blockTopic == "" { *blockTopic = fmt.Sprintf("%v-block", *defaultTopic) }
-	if *logTopic == "" { *logTopic = fmt.Sprintf("%v-logs", *defaultTopic) }
-	if *txTopic == "" { *txTopic = fmt.Sprintf("%v-tx", *defaultTopic) }
-	if *receiptTopic == "" { *receiptTopic = fmt.Sprintf("%v-receipt", *defaultTopic) }
-	if *codeTopic == "" { *codeTopic = fmt.Sprintf("%v-code", *defaultTopic) }
-	if *stateTopic == "" { *stateTopic = fmt.Sprintf("%v-state", *defaultTopic) }
+	if cfg.defaultTopic == "" { cfg.defaultTopic = fmt.Sprintf("cardinal-%v", chainid) }
+	if cfg.blockTopic == "" { cfg.blockTopic = fmt.Sprintf("%v-block", cfg.defaultTopic) }
+	if cfg.logTopic == "" { cfg.logTopic = fmt.Sprintf("%v-logs", cfg.defaultTopic) }
+	if cfg.txTopic == "" { cfg.txTopic = fmt.Sprintf("%v-tx", cfg.defaultTopic) }
+	if cfg.receiptTopic == "" { cfg.receiptTopic = fmt.Sprintf("%v-receipt", cfg.defaultTopic) }
+	if cfg.codeTopic == "" { cfg.codeTopic = fmt.Sprintf("%v-code", cfg.defaultTopic) }
+	if cfg.stateTopic == "" { cfg.stateTopic = fmt.Sprintf("%v-state", cfg.defaultTopic) }
 	var err error
 	brokers := []transports.ProducerBrokerParams{
 		{
@@ -147,17 +138,17 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 		},
 	}
 	schema := map[string]string{
-		fmt.Sprintf("c/%x/a/", chainid): *stateTopic,
-		fmt.Sprintf("c/%x/s", chainid): *stateTopic,
-		fmt.Sprintf("c/%x/c/", chainid): *codeTopic,
-		fmt.Sprintf("c/%x/b/[0-9a-z]+/h", chainid): *blockTopic,
-		fmt.Sprintf("c/%x/b/[0-9a-z]+/d", chainid): *blockTopic,
-		fmt.Sprintf("c/%x/b/[0-9a-z]+/w", chainid): *blockTopic,
-		fmt.Sprintf("c/%x/b/[0-9a-z]+/u/", chainid): *blockTopic,
-		fmt.Sprintf("c/%x/n/", chainid): *blockTopic,
-		fmt.Sprintf("c/%x/b/[0-9a-z]+/t/", chainid): *txTopic,
-		fmt.Sprintf("c/%x/b/[0-9a-z]+/r/", chainid): *receiptTopic,
-		fmt.Sprintf("c/%x/b/[0-9a-z]+/l/", chainid): *logTopic,
+		fmt.Sprintf("c/%x/a/", chainid): cfg.stateTopic,
+		fmt.Sprintf("c/%x/s", chainid): cfg.stateTopic,
+		fmt.Sprintf("c/%x/c/", chainid): cfg.codeTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/h", chainid): cfg.blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/d", chainid): cfg.blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/w", chainid): cfg.blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/u/", chainid): cfg.blockTopic,
+		fmt.Sprintf("c/%x/n/", chainid): cfg.blockTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/t/", chainid): cfg.txTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/r/", chainid): cfg.receiptTopic,
+		fmt.Sprintf("c/%x/b/[0-9a-z]+/l/", chainid): cfg.logTopic,
 	}
 
 	// Let plugins add schema updates for any values they will provide.
@@ -165,24 +156,24 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 		extern.UpdateStreamsSchema(schema)
 	}
 
-	if strings.HasPrefix(*brokerURL, "kafka://") {
+	if strings.HasPrefix(cfg.brokerURL, "kafka://") {
 		brokers = append(brokers, transports.ProducerBrokerParams{
-			URL: *brokerURL,
-			DefaultTopic: *defaultTopic,
+			URL: cfg.brokerURL,
+			DefaultTopic: cfg.defaultTopic,
 			Schema: schema,
 		})
-	} else if strings.HasPrefix(*brokerURL, "file://") {
+	} else if strings.HasPrefix(cfg.brokerURL, "file://") {
 		brokers = append(brokers, transports.ProducerBrokerParams{
-			URL: *brokerURL,
+			URL: cfg.brokerURL,
 		})
 	}
-	log.Info("Producing to brokers", "brokers", brokers, "burl", *brokerURL)
+	log.Info("Producing to brokers", "brokers", brokers, "burl", cfg.brokerURL)
 	producer, err = transports.ResolveMuxProducer(
 		brokers,
 		&resumer{},
 	)
 	if err != nil { panic(err.Error()) }
-	if minap := *minActiveProducers; minap > 0 {
+	if minap := cfg.minActiveProducers; minap > 0 {
 		go func() {
 			client := stack.Attach()
 			for client == nil {
@@ -221,7 +212,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 			}
 		}()
 	}
-	if *brokerURL != "" {
+	if cfg.brokerURL != "" {
 		go func() {
 			t := time.NewTicker(time.Second * 30)
 			defer t.Stop()
@@ -229,8 +220,8 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 				gethPeersGauge.Update(int64(stack.Server().PeerCount()))
 			}
 		}()
-		if *statsdaddr != "" {
-			udpAddr, err := net.ResolveUDPAddr("udp", *statsdaddr)
+		if cfg.statsdaddr != "" {
+			udpAddr, err := net.ResolveUDPAddr("udp", cfg.statsdaddr)
 			if err != nil {
 				log.Error("Invalid Address. Statsd will not be configured.", "error", err.Error())
 			}
@@ -241,15 +232,15 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 				udpAddr,
 			)
 		}
-		if *cloudwatchns != "" {
+		if cfg.cloudwatchns != "" {
 			go cloudmetrics.Publish(metrics.MajorRegistry,
-				*cloudwatchns,
+				cfg.cloudwatchns,
 				cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
 				cloudmetrics.Interval(30 * time.Second),
 			)
 		}
-		if *startBlockOverride > 0 {
-			startBlock = *startBlockOverride
+		if cfg.startBlockOverride > 0 {
+			startBlock = cfg.startBlockOverride
 		} else {
 			v, err := producer.LatestBlockFromFeed()
 			if err != nil {
@@ -261,18 +252,18 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 				}
 			}
 		}
-		if *txPoolTopic != "" {
+		if cfg.txPoolTopic != "" {
 			go func() {
 				// TODO: we should probably do something within Cardinal streams to
 				// generalize this so it's not Kafka specific and can work with other
 				// transports.
 				ch := make(chan core.NewTxsEvent, 1000)
 				sub := b.SubscribeNewTxsEvent(ch)
-				brokers, config := transports.ParseKafkaURL(strings.TrimPrefix(*brokerURL, "kafka://"))
+				brokers, config := transports.ParseKafkaURL(strings.TrimPrefix(cfg.brokerURL, "kafka://"))
 				configEntries := make(map[string]*string)
 				configEntries["retention.ms"] = strPtr("3600000")
-				if err := transports.CreateTopicIfDoesNotExist(strings.TrimPrefix(*brokerURL, "kafka://"), *txPoolTopic, 0, configEntries); err != nil {
-					panic(fmt.Sprintf("Could not create topic %v on broker %v: %v", *txPoolTopic, *brokerURL, err.Error()))
+				if err := transports.CreateTopicIfDoesNotExist(strings.TrimPrefix(cfg.brokerURL, "kafka://"), cfg.txPoolTopic, 0, configEntries); err != nil {
+					panic(fmt.Sprintf("Could not create topic %v on broker %v: %v", cfg.txPoolTopic, cfg.brokerURL, err.Error()))
 				}
 				// This is about twice the size of the largest possible transaction if
 				// all gas in a block were zero bytes in a transaction's data. It should
@@ -290,7 +281,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 							txdata, err := rlp.EncodeToBytes(tx)
 							if err == nil {
 								select {
-								case producer.Input() <- &sarama.ProducerMessage{Topic: *txPoolTopic, Value: sarama.ByteEncoder(txdata)}:
+								case producer.Input() <- &sarama.ProducerMessage{Topic: cfg.txPoolTopic, Value: sarama.ByteEncoder(txdata)}:
 								case err := <-producer.Errors():
 									log.Error("Error emitting: %v", "err", err.Error())
 								}
@@ -310,11 +301,9 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	}
 	log.Error("Cardinal EVM plugin initialized")
 
-	if *testplugins != "" {
-		for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
-			log.Error("from block updater", "response", updater.ExternUpdatesTest())
-			
-		}
+	for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
+		log.Error("from block updater", "response", updater.ExternUpdatesTest())
+		
 	}
 
 }
@@ -336,7 +325,7 @@ func BUPreReorg(common common.Hash, oldChain []common.Hash, newChain []common.Ha
 		return
 	}
 	
-	if len(oldChain) > *reorgThreshold && len(newChain) > 0 {
+	if len(oldChain) > cfg.reorgThreshold && len(newChain) > 0 {
 		pendingReorgs[common], err = producer.Reorg(int64(block.NumberU64()), ctypes.Hash(common))
 		if err != nil {
 			log.Error("Could not start producer reorg", "block", common, "num", block.NumberU64(), "err", err)
@@ -391,10 +380,10 @@ func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Has
 			if pb := r.GetBlock(ctx, i); pb != nil {
 				if pb.Number == int64(number) && (pb.Hash != hash) && !reset {
 					reset = true
-					if int(i) < *reorgThreshold {
+					if int(i) < cfg.reorgThreshold {
 						i = 0
 					} else {
-						i -= uint64(*reorgThreshold)
+						i -= uint64(cfg.reorgThreshold)
 					}
 					continue
 				}
