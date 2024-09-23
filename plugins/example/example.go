@@ -19,23 +19,24 @@ func init() {
 }
 
 type ExampleConfig struct {
-	FieldZero   string `yaml:"server"`
-	FieldOne    int    `yaml:"port"`
+	FieldZero   string `yaml:"fieldZero"`
+	FieldOne    int    `yaml:"fieldOne"`
 }
 
 var cfg ExampleConfig
 
 
-
 func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
 	log.Info("Example module initialized")
 	
-	cfg, ok := xplugeth.GetConfig[ExampleConfig]("example"); !ok {
+	cfg, ok := xplugeth.GetConfig[ExampleConfig]("example")
+	if !ok {
 		log.Warn("could not acqire config")
 	}
 
-}
+	log.Error("this is the config", "cfg", cfg, "fieldZero", cfg.FieldZero, "fieldOne", cfg.FieldOne,)
 
+}
 
 func (*exampleModule) Shutdown() {
 	log.Info("Byeee!")

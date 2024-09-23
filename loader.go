@@ -3,7 +3,7 @@ package xplugeth
 import (
 	"os"
 	"path/filepath"
-	"strings"
+	"io/ioutil"
 
 	"github.com/go-yaml/yaml"
 
@@ -142,26 +142,24 @@ func GetConfig[T any](name string) (*T, bool) {
 	
 	c := new(T)
 
-	file := configPath + name + ".yaml"
+	file := configPath + "/" + name + ".yaml"
 
-	_, err := os.Stat(file)
+	_, err = os.Stat(file)
 	if os.IsNotExist(err) {
-		log.Error("plugin config file exists")
+		log.Error("plugin config file does not exist")
 		return nil, false
 	}
 
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
-		log.Error("error reading plugin config")
+		log.Error("error reading plugin config", "err", err)
 		return nil, false
 	}
 
-	if err := yaml.unmarshal(data, c); err != nil {
-		log.Error("error unmarshalling plugin config")
+	if err := yaml.Unmarshal(data, c); err != nil {
+		log.Error("error unmarshalling plugin config", "err", err)
 		return nil, false
 	}
 
-	return T, true
-	
-	return "place holder"
+	return c, true
 }
