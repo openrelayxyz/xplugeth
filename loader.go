@@ -1,8 +1,18 @@
 package xplugeth
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/go-yaml/yaml"
+
+	"github.com/ethereum/go-ethereum/log"
+
 	"reflect"
 )
+
+var configPath string
 
 type pluginLoader struct {
 	modules []reflect.Type
@@ -32,6 +42,7 @@ func (pl *pluginLoader) initialize() {
 			}
 		}
 	}
+	configPath = os.Getenv("PLUGIN_CONFIG")
 }
 
 func (pl *pluginLoader) getModules(t reflect.Type) []any {
@@ -108,4 +119,49 @@ func GetSingleton[t any]() (t, bool) {
 		return x, ok
 	}
 	return v.(t), ok
+}
+
+func GetConfig[T any](name string) (*T, bool) {
+
+	if configPath == "" {
+		execPath, _ := os.Executable()
+		execDir := filepath.Dir(execPath)
+		configPath = filepath.Join(execDir, "plugin_config")
+		log.Warn("no plugin config path set, config path set to default")
+	}
+
+	pathInfo, err := os.Stat(configPath)
+	if !pathInfo.IsDir() {
+		log.Error("the provided plugin config path is not a directory, config path set to default")
+	}
+	if os.IsNotExist(err) {
+		log.Error("the provided plugin config path does not exist, config path set to default")
+	} else if err != nil {
+		log.Error("error while checking the provided plugin config path, config path set to default", "err", err)
+	}
+	
+	c := new(T)
+
+	file := configPath + name + ".yaml"
+
+	_, err := os.Stat(file)
+	if os.IsNotExist(err) {
+		log.Error("plugin config file exists")
+		return nil, false
+	}
+
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Error("error reading plugin config")
+		return nil, false
+	}
+
+	if err := yaml.unmarshal(data, c); err != nil {
+		log.Error("error unmarshalling plugin config")
+		return nil, false
+	}
+
+	return T, true
+	
+	return "place holder"
 }

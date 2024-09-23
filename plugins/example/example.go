@@ -14,14 +14,29 @@ var (
 
 type exampleModule struct {}
 
+func init() {
+	xplugeth.RegisterModule[exampleModule]()
+}
+
+type ExampleConfig struct {
+	FieldZero   string `yaml:"server"`
+	FieldOne    int    `yaml:"port"`
+}
+
+var cfg ExampleConfig
+
+
+
 func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
 	log.Info("Example module initialized")
+	
+	cfg, ok := xplugeth.GetConfig[ExampleConfig]("example"); !ok {
+		log.Warn("could not acqire config")
+	}
+
 }
+
 
 func (*exampleModule) Shutdown() {
 	log.Info("Byeee!")
-}
-
-func init() {
-	xplugeth.RegisterModule[exampleModule]()
 }
