@@ -14,14 +14,32 @@ var (
 
 type exampleModule struct {}
 
+func init() {
+	xplugeth.RegisterModule[exampleModule]()
+}
+
+type ExampleConfig struct {
+	FieldZero   bool `yaml:"fieldZero"`
+	FieldOne    string `yaml:"fieldOne"`
+}
+
+var cfg *ExampleConfig
+
+
 func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
 	log.Info("Example module initialized")
+	
+	var ok bool
+	cfg, ok = xplugeth.GetConfig[ExampleConfig]("example")
+	if !ok {
+		cfg = &ExampleConfig{ FieldOne: "not set" }
+		log.Warn("could not acqire config, all values set to default")
+	}
+
+	log.Info("example config values", "fieldZero", cfg.FieldZero, "fieldOne", cfg.FieldOne,)
+
 }
 
 func (*exampleModule) Shutdown() {
 	log.Info("Byeee!")
-}
-
-func init() {
-	xplugeth.RegisterModule[exampleModule]()
 }
