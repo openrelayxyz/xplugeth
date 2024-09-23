@@ -19,22 +19,24 @@ func init() {
 }
 
 type ExampleConfig struct {
-	FieldZero   string `yaml:"fieldZero"`
-	FieldOne    int    `yaml:"fieldOne"`
+	FieldZero   bool `yaml:"fieldZero"`
+	FieldOne    string `yaml:"fieldOne"`
 }
 
-var cfg ExampleConfig
+var cfg *ExampleConfig
 
 
 func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
 	log.Info("Example module initialized")
 	
-	cfg, ok := xplugeth.GetConfig[ExampleConfig]("example")
+	var ok bool
+	cfg, ok = xplugeth.GetConfig[ExampleConfig]("example")
 	if !ok {
-		log.Warn("could not acqire config")
+		cfg = &ExampleConfig{ FieldOne: "not set" }
+		log.Warn("could not acqire config, all values set to default")
 	}
 
-	log.Error("this is the config", "cfg", cfg, "fieldZero", cfg.FieldZero, "fieldOne", cfg.FieldOne,)
+	log.Info("example config values", "fieldZero", cfg.FieldZero, "fieldOne", cfg.FieldOne,)
 
 }
 
