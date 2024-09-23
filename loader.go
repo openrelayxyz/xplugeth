@@ -142,7 +142,7 @@ func GetConfig[T any](name string) (*T, bool) {
 	
 	c := new(T)
 
-	file := configPath + "/" + name + ".yaml"
+	file := filepath.Join(configPath, name + ".yaml")
 
 	_, err = os.Stat(file)
 	if os.IsNotExist(err) {
