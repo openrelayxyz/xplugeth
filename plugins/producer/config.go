@@ -13,7 +13,7 @@ type ProducerConfig struct {
 	StartBlockOverride   uint64 `yaml:"cardinal.start.block"`          // "The first block to emit"
 	ReorgThreshold       int    `yaml:"cardinal.reorg.threshold"`      // "The number of blocks for clients to support quick reorgs"
 	Statsdaddr           string `yaml:"cardinal.statsd.addr"`          // "UDP address for a statsd endpoint"
-	Cloudwatchns         string  `yaml:"cardinal.cloudwatch.namespace"` // "CloudWatch Namespace for cardinal metrics"
+	Cloudwatchns         string `yaml:"cardinal.cloudwatch.namespace"` // "CloudWatch Namespace for cardinal metrics"
 	MinActiveProducers   uint   `yaml:"cardinal.min.producers"`        // "The minimum number of healthy producers for maintenance operations like state trie flush to take place"
 }
 
