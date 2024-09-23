@@ -45,7 +45,7 @@ type externalBlockUpdates interface {
 }
 
 type externalAddBlock interface {
-	CardinalAddBlock(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{})
+	CardinalAddBlockHook(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{})
 }
 
 type externalTestPlugin interface {
@@ -96,9 +96,9 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	var ok bool
 	cfg, ok = xplugeth.GetConfig[ProducerConfig]("producer")
 	if !ok {
-		log.Warn("no config found producer plugin, all values set to default")
+		cfg = &ProducerConfig{ reorgThreshold:128 }
+		log.Warn("no config found, producer plugin, all values set to default")
 	}
-	cfg = &ProducerConfig{ reorgThreshold:128 }
 
 	backend = b
 	stack = s
@@ -114,7 +114,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 
 	addBlockFns := []func(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{}){}
 	for _, extern := range xplugeth.GetModules[externalAddBlock]() {
-		addBlockFns = append(addBlockFns, extern.CardinalAddBlock)
+		addBlockFns = append(addBlockFns, extern.CardinalAddBlockHook)
 	}
 
 	addBlockHook = func(number int64, hash, parent ctypes.Hash, td *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
