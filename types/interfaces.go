@@ -3,21 +3,25 @@ package types
 import (
 	"context"
 	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/core/bloombits"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"time"
 )
 
+type Client interface {
+	Call(interface{}, string, ...interface{}) error
+}
 
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
@@ -80,8 +84,8 @@ type Backend interface {
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 }
 
-	// TODO:
-	// InsertBlock(data []byte) error // RLP encoded block
-	// GetTrie(hash Hash) (Trie, error)
-	// GetAccountTrie(stateRoot Hash, account Address) (Trie, error)
-	// GetContractCode(Hash) ([]byte, error)
+// TODO:
+// InsertBlock(data []byte) error // RLP encoded block
+// GetTrie(hash Hash) (Trie, error)
+// GetAccountTrie(stateRoot Hash, account Address) (Trie, error)
+// GetContractCode(Hash) ([]byte, error)
