@@ -8,7 +8,6 @@ import (
 	"math/big"
 	"errors"
 	"time"
-	"bytes"
 	lru "github.com/hashicorp/golang-lru"
 	
 
@@ -238,12 +237,9 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 // corresponding blocks are moved from leveldb to the ancients database. At
 // some point in the future, we may want to look at a way to move the state
 // updates to an ancients table of their own for longer term retention.
-func (bu *blockUpdatesModule) AppendAncient(number uint64, hash, headerBytes, body, receipts, td []byte) {
-	header := new(gtypes.Header)
-	if err := rlp.Decode(bytes.NewReader(headerBytes), header); err != nil {
-		log.Warn("Could not decode ancient header", "block", number)
-		return
-	}
+
+// We have changed the name of this function to ModifyAncients to correspond to the geth implementation. 
+func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Header) {
 	go func() {
 		// Background this so we can clean up once the backend is set, but we don't
 		// block the creation of the backend.
