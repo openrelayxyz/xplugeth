@@ -34,6 +34,7 @@ import (
 // the imports below are bringing in other plugins which have to be present for the producer to function properly
 import (
 	_ "github.com/openrelayxyz/xplugeth/plugins/blockupdates"
+	_ "github.com/openrelayxyz/xplugeth/plugins/merge"
 )
 
 type cardinalProducerModule struct {
@@ -523,6 +524,7 @@ func (*cardinalProducerModule) PostTrieCommit(common.Hash) {
 type cardinalAPI struct {
 	stack   *node.Node
 	blockUpdatesByNumber func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
+	producer *cardinalProducerModule
 }
 
 func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNumber) (bool, error) {
@@ -550,20 +552,13 @@ func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNum
 		if err != nil {
 			return false, err
 		}
-		for _, item := range xplugeth.GetModulesByMethodName("BlockUpdates") {
-			switch iFace := item.(type) {
-			case *cardinalProducerModule:
-				iFace.BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
-			default:
-				log.Error("internal BlockUpdates func not found, Producer, ReproduceBlocks")
-			}
-		}
+		api.producer.BlockUpdates(block, td, receipts, destructs, accounts, storage, code)
 	}
 	startBlock = oldStartBlock
 	return true, nil
 }
 
-func (*cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+func (c *cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 	for _, extern := range xplugeth.GetModules[externalBlockUpdates]() {
 		v = extern.BlockUpdatesByNumber
@@ -576,6 +571,7 @@ func (*cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) 
 			Service:		&cardinalAPI{
 				stack,
 				v,
+				c,
 			},
 			Public:		true,
 		},
