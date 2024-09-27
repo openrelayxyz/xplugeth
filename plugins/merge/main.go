@@ -4,16 +4,19 @@ import (
 	"fmt"
 	"math/big"
 
-	glog "github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	ctypes "github.com/openrelayxyz/cardinal-types"
-	"github.com/openrelayxyz/cardinal-types/hexutil"
 	"github.com/openrelayxyz/cardinal-types/metrics"
+
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
 )
 
 type mergePlugin struct{}
+type cardinalHook struct{}
 
 var (
 	postMerge       bool
@@ -21,7 +24,6 @@ var (
 	gethWeightGauge = metrics.NewMajorGauge("/geth/weight")
 	stack           node.Node
 	chainid         int64
-	log             glog.Logger
 )
 
 type numLookup struct {
@@ -30,6 +32,7 @@ type numLookup struct {
 
 func init() {
 	xplugeth.RegisterModule[mergePlugin]()
+	xplugeth.RegisterModule[cardinalHook]()
 }
 
 func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
@@ -50,7 +53,7 @@ func getSafeFinalized() (*big.Int, *big.Int) {
 	return snl.Number.ToInt(), fnl.Number.ToInt()
 }
 
-func CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
+func (*cardinalHook) CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
 	log.Info("add cardinalBlockHook")
 	if !postMerge {
 		v, _ := backend.ChainDb().Get([]byte("eth2-transition"))
