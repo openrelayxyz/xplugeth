@@ -201,7 +201,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 		
 	}
 	go func () {
-		db := b.ChainDb()
+		db := bu.backend.ChainDb()
 		for su := range suCh {
 			data, err := rlp.EncodeToBytes(su.su)
 			if err != nil {
@@ -243,10 +243,10 @@ func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Heade
 	go func() {
 		// Background this so we can clean up once the backend is set, but we don't
 		// block the creation of the backend.
-		for sessionBackend == nil {
+		for bu.backend == nil {
 			time.Sleep(250 * time.Millisecond)
 		}
-		sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
+		bu.backend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
 	}()
 
 }
@@ -315,15 +315,15 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 // blockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
 func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
-	block, err := sessionBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
+	block, err := b.backend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 	if block == nil {
 		return nil, nil, nil, nil, nil, nil, nil, errors.New("block not found") 
 	}
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
-	td := sessionBackend.GetTd(context.Background(), block.Hash())
+	td := b.backend.GetTd(context.Background(), block.Hash())
 
-	receipts, err := sessionBackend.GetReceipts(context.Background(), block.Hash())
+	receipts, err := b.backend.GetReceipts(context.Background(), block.Hash())
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
 	var su *stateUpdate
@@ -331,7 +331,7 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 		su = v.(*stateUpdate)
 	} else {
 		su = new(stateUpdate)
-		data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
+		data, err := b.backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 		if err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
 		if err := rlp.DecodeBytes(data, su); err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
 	}
