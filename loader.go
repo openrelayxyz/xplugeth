@@ -126,7 +126,7 @@ func GetConfig[T any](name string) (*T, bool) {
 	if configPath == "" {
 		execPath, _ := os.Executable()
 		execDir := filepath.Dir(execPath)
-		configPath = filepath.Join(execDir, "pluginconfig")
+		configPath  = execDir
 		log.Warn("no plugin config path set, config path set to default")
 	}
 
@@ -146,7 +146,7 @@ func GetConfig[T any](name string) (*T, bool) {
 
 	_, err = os.Stat(file)
 	if os.IsNotExist(err) {
-		log.Error("plugin config file does not exist")
+		log.Warn("plugin config file does not exist")
 		return nil, false
 	}
 
