@@ -135,8 +135,9 @@ func stateTrieUpdatesByNumber(i int64) (map[common.Hash]struct{}, map[common.Has
 		}
 		headerCache.Add(i, header)
 	}
+	var currentTrie state.Trie
 	if header != nil {
-		currentTrie, err := getTrie(header.Root)
+		currentTrie, err = getTrie(header.Root)
 	} else {
 		return nil, nil, nil, nil, err
 	}
