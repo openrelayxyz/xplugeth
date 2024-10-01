@@ -270,7 +270,7 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 		return
 	}
 	if recentEmits.Len() > 10 && !recentEmits.Contains(block.ParentHash()) {
-		parentBlock, err := sessionBackend.BlockByHash(context.Background(), hash)
+		parentBlock, err := sessionBackend.BlockByHash(context.Background(), block.ParentHash())
 		if err != nil {
 				log.Error("Could not decode block during reorg", "hash", hash, "err", err)
 				return
