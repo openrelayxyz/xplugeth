@@ -160,10 +160,6 @@ type externalProducerPostReorg interface {
 	BUPostReorg(common.Hash, []common.Hash, []common.Hash)
 }
 
-type externalTestPlugin interface {
-	ExternProducerTest() string
-}
-
 type blockUpdatesModule struct {
 	backend types.Backend
 }
@@ -178,7 +174,6 @@ func (*blockUpdatesModule) ExternUpdatesTest() string {
 
 func init() {
 	xplugeth.RegisterModule[blockUpdatesModule]()
-	xplugeth.RegisterHook[externalTestPlugin]()
 	xplugeth.RegisterHook[externalProducerBlockUpdates]()
 	xplugeth.RegisterHook[externalProducerPreReorg]()
 	xplugeth.RegisterHook[externalProducerPostReorg]()
@@ -194,12 +189,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	cache, _ = lru.New(128)
 	recentEmits, _ = lru.New(128)
 	suCh = make(chan *stateUpdateWithRoot, 128)
-	log.Error("Initialized node block updater plugin")
-
-	for _, extern := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Error("from cardinal plugin", "response", extern.ExternProducerTest())
-		
-	}
+	
 	go func () {
 		db := b.ChainDb()
 		for su := range suCh {
@@ -213,6 +203,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 			log.Debug("Stored state update", "root", su.root)
 		}
 	}()
+	log.Info("Initialized node block updater plugin")
 }
 
 
