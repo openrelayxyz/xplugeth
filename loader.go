@@ -1,15 +1,16 @@
 package xplugeth
 
 import (
-	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"io/ioutil"
+	"reflect"
 
 	"github.com/go-yaml/yaml"
 
 	"github.com/ethereum/go-ethereum/log"
 
-	"reflect"
 )
 
 var configPath string
@@ -91,8 +92,8 @@ func RegisterHook[t any]() {
 	pl.registerHook(reflect.TypeFor[t]())
 }
 
-func Initialize() {
-	pl.initialize()
+func Initialize(dirpath string) {
+	pl.initialize(dirpath)
 }
 
 func GetModules[t any]() []t {
@@ -131,16 +132,18 @@ func GetConfig[T any](name string) (*T, bool) {
 
 	var fpath string
 	for _, file := range files {
-		if file.Name() == name {
-			if !strings.HasSuffix(file.Name(), ".yaml") || !strings.HasSuffix(file.Name(), ".yml") {
-				log.Error("plugin config file is not .yml or .yaml file. Skipping.", "file", file)
-				return nil, false
+		ext := filepath.Ext(file.Name())
+		nameWithoutExt := strings.TrimSuffix(file.Name(), ext)
+		if nameWithoutExt == name {
+			if !strings.HasSuffix(file.Name(), ".yaml") && !strings.HasSuffix(file.Name(), ".yml") {
+				log.Error("plugin config file is not .yml or .yaml file. Skipping.", "file", file.Name())
+				continue
 			} else {
 				fpath = path.Join(configPath, file.Name())
 			}
 		} else {
 			log.Warn("plugin config file does not exist")
-			return nil, false
+			continue
 		}
 	}	
 
