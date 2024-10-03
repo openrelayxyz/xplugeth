@@ -49,10 +49,6 @@ type externalAddBlock interface {
 	CardinalAddBlockHook(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{})
 }
 
-type externalTestPlugin interface {
-	ExternUpdatesTest() string
-}
-
 type externalStreamSchema interface {
 	UpdateStreamsSchema(map[string]string)
 }
@@ -62,7 +58,6 @@ func init() {
 	xplugeth.RegisterHook[externalBlockUpdates]()
 	xplugeth.RegisterHook[externalAddBlock]()
 	xplugeth.RegisterHook[externalStreamSchema]()
-	xplugeth.RegisterHook[externalTestPlugin]()
 }
 
 func (*cardinalProducerModule) ExternProducerTest() string {
@@ -300,13 +295,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 			}()
 		}
 	}
-	log.Error("Cardinal EVM plugin initialized")
-
-	for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Info("block updater module located", "response", updater.ExternUpdatesTest())
-		
-	}
-
+	log.Info("Cardinal EVM plugin initialized")
 }
 
 type receiptMeta struct {
