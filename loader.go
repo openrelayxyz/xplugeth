@@ -31,7 +31,7 @@ func (pl *pluginLoader) registerModule(t reflect.Type) {
 	pl.modules = append(pl.modules, t)
 }
 
-func (pl *pluginLoader) initialize() {
+func (pl *pluginLoader) initialize(dirpath string) {
 	pl.hooks = make(map[reflect.Type][]any)
 	for _, mt := range pl.modules {
 		mv := reflect.New(mt)
@@ -42,7 +42,7 @@ func (pl *pluginLoader) initialize() {
 			}
 		}
 	}
-	configPath = os.Getenv("PLUGIN_CONFIG")
+	configPath = dirpath
 }
 
 func (pl *pluginLoader) getModules(t reflect.Type) []any {
@@ -123,34 +123,30 @@ func GetSingleton[t any]() (t, bool) {
 
 func GetConfig[T any](name string) (*T, bool) {
 
-	if configPath == "" {
-		execPath, _ := os.Executable()
-		execDir := filepath.Dir(execPath)
-		configPath  = execDir
-		log.Warn("no plugin config path set, config path set to default")
-	}
-
-	pathInfo, err := os.Stat(configPath)
-	if !pathInfo.IsDir() {
-		log.Error("the provided plugin config path is not a directory, config path set to default")
-	}
-	if os.IsNotExist(err) {
-		log.Error("the provided plugin config path does not exist, config path set to default")
-	} else if err != nil {
-		log.Error("error while checking the provided plugin config path, config path set to default", "err", err)
-	}
-	
-	c := new(T)
-
-	file := filepath.Join(configPath, name + ".yaml")
-
-	_, err = os.Stat(file)
-	if os.IsNotExist(err) {
-		log.Warn("plugin config file does not exist")
+	files, err := ioutil.ReadDir(configPath)
+	if err != nil {
+		log.Warn("Could not load plugins config directory, config values set to default.", "path", configPath)
 		return nil, false
 	}
 
-	data, err := ioutil.ReadFile(file)
+	var fpath string
+	for _, file := range files {
+		if file.Name() == name {
+			if !strings.HasSuffix(file.Name(), ".yaml") || !strings.HasSuffix(file.Name(), ".yml") {
+				log.Error("plugin config file is not .yml or .yaml file. Skipping.", "file", file)
+				return nil, false
+			} else {
+				fpath = path.Join(configPath, file.Name())
+			}
+		} else {
+			log.Warn("plugin config file does not exist")
+			return nil, false
+		}
+	}	
+
+	c := new(T)
+
+	data, err := ioutil.ReadFile(fpath)
 	if err != nil {
 		log.Error("error reading plugin config", "err", err)
 		return nil, false
