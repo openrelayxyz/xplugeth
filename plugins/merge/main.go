@@ -15,6 +15,16 @@ import (
 	"github.com/openrelayxyz/xplugeth/types"
 )
 
+// by importing the cardinal plugin below we can create an import chain which enables us to only need to import this plugin into geth
+import (
+	_ "github.com/openrelayxyz/xplugeth/plugins/producer"
+)
+
+type externalTestPlugin interface {
+	ExternUpdatesTest() string
+	ExternProducerTest() string
+}
+
 type mergePlugin struct{}
 type cardinalHook struct{}
 
@@ -33,12 +43,22 @@ type numLookup struct {
 func init() {
 	xplugeth.RegisterModule[mergePlugin]()
 	xplugeth.RegisterModule[cardinalHook]()
+	xplugeth.RegisterHook[externalTestPlugin]()
 }
 
 func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
 	stack = *s
 	backend = b
 	chainid = b.ChainConfig().ChainID.Int64()
+	log.Info("merge plugin Initialized")
+	for _, extern := range xplugeth.GetModules[externalTestPlugin]() {
+		log.Info("from cardinal plugin", "response", extern.ExternUpdatesTest())
+
+	}
+	for _, extern := range xplugeth.GetModules[externalTestPlugin]() {
+		log.Info("from cardinal plugin", "response", extern.ExternProducerTest())
+
+	}
 }
 
 func getSafeFinalized() (*big.Int, *big.Int) {
@@ -54,7 +74,6 @@ func getSafeFinalized() (*big.Int, *big.Int) {
 }
 
 func (*cardinalHook) CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
-	log.Info("add cardinalBlockHook")
 	if !postMerge {
 		v, _ := backend.ChainDb().Get([]byte("eth2-transition"))
 		if len(v) > 0 {
