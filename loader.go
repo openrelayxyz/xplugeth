@@ -1,8 +1,19 @@
 package xplugeth
 
 import (
+	"path"
+	"path/filepath"
+	"strings"
+	"io/ioutil"
 	"reflect"
+
+	"github.com/go-yaml/yaml"
+
+	"github.com/ethereum/go-ethereum/log"
+
 )
+
+var configPath string
 
 type pluginLoader struct {
 	modules []reflect.Type
@@ -21,7 +32,7 @@ func (pl *pluginLoader) registerModule(t reflect.Type) {
 	pl.modules = append(pl.modules, t)
 }
 
-func (pl *pluginLoader) initialize() {
+func (pl *pluginLoader) initialize(dirpath string) {
 	pl.hooks = make(map[reflect.Type][]any)
 	for _, mt := range pl.modules {
 		mv := reflect.New(mt)
@@ -32,6 +43,7 @@ func (pl *pluginLoader) initialize() {
 			}
 		}
 	}
+	configPath = dirpath
 }
 
 func (pl *pluginLoader) getModules(t reflect.Type) []any {
@@ -80,8 +92,8 @@ func RegisterHook[t any]() {
 	pl.registerHook(reflect.TypeFor[t]())
 }
 
-func Initialize() {
-	pl.initialize()
+func Initialize(dirpath string) {
+	pl.initialize(dirpath)
 }
 
 func GetModules[t any]() []t {
@@ -108,4 +120,45 @@ func GetSingleton[t any]() (t, bool) {
 		return x, ok
 	}
 	return v.(t), ok
+}
+
+func GetConfig[T any](name string) (*T, bool) {
+
+	files, err := ioutil.ReadDir(configPath)
+	if err != nil {
+		log.Warn("Could not load plugins config directory, config values set to default.", "path", configPath)
+		return nil, false
+	}
+
+	var fpath string
+	for _, file := range files {
+		ext := filepath.Ext(file.Name())
+		nameWithoutExt := strings.TrimSuffix(file.Name(), ext)
+		if nameWithoutExt == name {
+			if !strings.HasSuffix(file.Name(), ".yaml") && !strings.HasSuffix(file.Name(), ".yml") {
+				log.Warn("plugin config file is not .yml or .yaml file. Skipping.", "file", file.Name())
+				continue
+			} else {
+				fpath = path.Join(configPath, file.Name())
+			}
+		} else {
+			log.Warn("plugin config file does not exist")
+			continue
+		}
+	}	
+
+	c := new(T)
+
+	data, err := ioutil.ReadFile(fpath)
+	if err != nil {
+		log.Error("error reading plugin config", "err", err)
+		return nil, false
+	}
+
+	if err := yaml.Unmarshal(data, c); err != nil {
+		log.Error("error unmarshalling plugin config", "err", err)
+		return nil, false
+	}
+
+	return c, true
 }
