@@ -32,7 +32,7 @@ func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
 	cfg, ok = xplugeth.GetConfig[ExampleConfig]("example")
 	if !ok {
 		cfg = &ExampleConfig{ FieldOne: "not set" }
-		log.Warn("could not acqire config, all values set to default")
+		log.Warn("did not acqire config, example plugin, all values set to default")
 	}
 
 	log.Info("example config values", "fieldZero", cfg.FieldZero, "fieldOne", cfg.FieldOne,)

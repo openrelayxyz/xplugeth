@@ -1,15 +1,16 @@
 package xplugeth
 
 import (
-	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"io/ioutil"
+	"reflect"
 
 	"github.com/go-yaml/yaml"
 
 	"github.com/ethereum/go-ethereum/log"
 
-	"reflect"
 )
 
 var configPath string
@@ -31,7 +32,7 @@ func (pl *pluginLoader) registerModule(t reflect.Type) {
 	pl.modules = append(pl.modules, t)
 }
 
-func (pl *pluginLoader) initialize() {
+func (pl *pluginLoader) initialize(dirpath string) {
 	pl.hooks = make(map[reflect.Type][]any)
 	for _, mt := range pl.modules {
 		mv := reflect.New(mt)
@@ -42,7 +43,7 @@ func (pl *pluginLoader) initialize() {
 			}
 		}
 	}
-	configPath = os.Getenv("PLUGIN_CONFIG")
+	configPath = dirpath
 }
 
 func (pl *pluginLoader) getModules(t reflect.Type) []any {
@@ -91,8 +92,8 @@ func RegisterHook[t any]() {
 	pl.registerHook(reflect.TypeFor[t]())
 }
 
-func Initialize() {
-	pl.initialize()
+func Initialize(dirpath string) {
+	pl.initialize(dirpath)
 }
 
 func GetModules[t any]() []t {
@@ -123,34 +124,32 @@ func GetSingleton[t any]() (t, bool) {
 
 func GetConfig[T any](name string) (*T, bool) {
 
-	if configPath == "" {
-		execPath, _ := os.Executable()
-		execDir := filepath.Dir(execPath)
-		configPath  = execDir
-		log.Warn("no plugin config path set, config path set to default")
-	}
-
-	pathInfo, err := os.Stat(configPath)
-	if !pathInfo.IsDir() {
-		log.Error("the provided plugin config path is not a directory, config path set to default")
-	}
-	if os.IsNotExist(err) {
-		log.Error("the provided plugin config path does not exist, config path set to default")
-	} else if err != nil {
-		log.Error("error while checking the provided plugin config path, config path set to default", "err", err)
-	}
-	
-	c := new(T)
-
-	file := filepath.Join(configPath, name + ".yaml")
-
-	_, err = os.Stat(file)
-	if os.IsNotExist(err) {
-		log.Warn("plugin config file does not exist")
+	files, err := ioutil.ReadDir(configPath)
+	if err != nil {
+		log.Warn("Could not load plugins config directory, config values set to default.", "path", configPath)
 		return nil, false
 	}
 
-	data, err := ioutil.ReadFile(file)
+	var fpath string
+	for _, file := range files {
+		ext := filepath.Ext(file.Name())
+		nameWithoutExt := strings.TrimSuffix(file.Name(), ext)
+		if nameWithoutExt == name {
+			if !strings.HasSuffix(file.Name(), ".yaml") && !strings.HasSuffix(file.Name(), ".yml") {
+				log.Warn("plugin config file is not .yml or .yaml file. Skipping.", "file", file.Name())
+				continue
+			} else {
+				fpath = path.Join(configPath, file.Name())
+			}
+		} else {
+			log.Warn("plugin config file does not exist")
+			continue
+		}
+	}	
+
+	c := new(T)
+
+	data, err := ioutil.ReadFile(fpath)
 	if err != nil {
 		log.Error("error reading plugin config", "err", err)
 		return nil, false
