@@ -20,8 +20,10 @@ import (
 	_ "github.com/openrelayxyz/xplugeth/plugins/producer"
 )
 
-type externalTestPlugin interface {
+type externalUpdatesTestPlugin interface {
 	ExternUpdatesTest() string
+}
+type externalProducerTestPlugin interface {
 	ExternProducerTest() string
 }
 
@@ -43,7 +45,8 @@ type numLookup struct {
 func init() {
 	xplugeth.RegisterModule[mergePlugin]()
 	xplugeth.RegisterModule[cardinalHook]()
-	xplugeth.RegisterHook[externalTestPlugin]()
+	xplugeth.RegisterHook[externalUpdatesTestPlugin]()
+	xplugeth.RegisterHook[externalProducerTestPlugin]()
 }
 
 func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
@@ -51,13 +54,11 @@ func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
 	backend = b
 	chainid = b.ChainConfig().ChainID.Int64()
 	log.Info("merge plugin Initialized")
-	for _, extern := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Info("from cardinal plugin", "response", extern.ExternUpdatesTest())
-
+	for _, extern := range xplugeth.GetModules[externalUpdatesTestPlugin]() {
+		log.Info("from within merge plugin", "response", extern.ExternUpdatesTest())
 	}
-	for _, extern := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Info("from cardinal plugin", "response", extern.ExternProducerTest())
-
+	for _, extern := range xplugeth.GetModules[externalProducerTestPlugin]() {
+		log.Info("from within merge plugin", "response", extern.ExternProducerTest())
 	}
 }
 
