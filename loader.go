@@ -136,7 +136,7 @@ func GetConfig[T any](name string) (*T, bool) {
 		nameWithoutExt := strings.TrimSuffix(file.Name(), ext)
 		if nameWithoutExt == name {
 			if !strings.HasSuffix(file.Name(), ".yaml") && !strings.HasSuffix(file.Name(), ".yml") {
-				log.Error("plugin config file is not .yml or .yaml file. Skipping.", "file", file.Name())
+				log.Warn("plugin config file is not .yml or .yaml file. Skipping.", "file", file.Name())
 				continue
 			} else {
 				fpath = path.Join(configPath, file.Name())
