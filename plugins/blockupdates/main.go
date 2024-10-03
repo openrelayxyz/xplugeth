@@ -201,7 +201,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 		
 	}
 	go func () {
-		db := bu.backend.ChainDb()
+		db := b.ChainDb()
 		for su := range suCh {
 			data, err := rlp.EncodeToBytes(su.su)
 			if err != nil {
@@ -243,10 +243,10 @@ func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Heade
 	go func() {
 		// Background this so we can clean up once the backend is set, but we don't
 		// block the creation of the backend.
-		for bu.backend == nil {
+		for sessionBackend == nil {
 			time.Sleep(250 * time.Millisecond)
 		}
-		bu.backend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
+		sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
 	}()
 
 }
@@ -270,7 +270,7 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 		return
 	}
 	if recentEmits.Len() > 10 && !recentEmits.Contains(block.ParentHash()) {
-		parentBlock, err := sessionBackend.BlockByHash(context.Background(), hash)
+		parentBlock, err := sessionBackend.BlockByHash(context.Background(), block.ParentHash())
 		if err != nil {
 				log.Error("Could not decode block during reorg", "hash", hash, "err", err)
 				return
@@ -315,15 +315,15 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 // blockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
 func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
-	block, err := b.backend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
+	block, err := sessionBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 	if block == nil {
 		return nil, nil, nil, nil, nil, nil, nil, errors.New("block not found") 
 	}
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
-	td := b.backend.GetTd(context.Background(), block.Hash())
+	td := sessionBackend.GetTd(context.Background(), block.Hash())
 
-	receipts, err := b.backend.GetReceipts(context.Background(), block.Hash())
+	receipts, err := sessionBackend.GetReceipts(context.Background(), block.Hash())
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
 	var su *stateUpdate
@@ -331,7 +331,7 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 		su = v.(*stateUpdate)
 	} else {
 		su = new(stateUpdate)
-		data, err := b.backend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
+		data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 		if err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
 		if err := rlp.DecodeBytes(data, su); err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
 	}
@@ -419,4 +419,12 @@ func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rp
 		 Public:		true,
 	 },
  }
+}
+
+func (b *blockUpdatesAPI) BlockUpdatesTest(context.Context) string {
+	var notNill bool
+	if b.backend != nil {
+		notNill = true
+	}
+	return fmt.Sprintf("Reprting from blockupdates, the backend object is not nil: %v", notNill)
 }
