@@ -114,7 +114,11 @@ func stateTrieUpdatesByNumber(i int64) (map[common.Hash]struct{}, map[common.Has
 		headerCache.Add(i-1, lastHeader)
 	}
 	var lastTrie state.Trie
-	lastTrie, err = getTrie(lastHeader.Root)
+	if lastHeader != nil {
+		lastTrie, err = getTrie(lastHeader.Root)
+	} else {
+		return nil, nil, nil, nil, err
+	}
 	if err != nil {
 		log.Error("Error getting trie", "block", startBlock)
 		return nil, nil, nil, nil, err
@@ -131,7 +135,12 @@ func stateTrieUpdatesByNumber(i int64) (map[common.Hash]struct{}, map[common.Has
 		}
 		headerCache.Add(i, header)
 	}
-	currentTrie, err := getTrie(header.Root)
+	var currentTrie state.Trie
+	if header != nil {
+		currentTrie, err = getTrie(header.Root)
+	} else {
+		return nil, nil, nil, nil, err
+	}
 	if err != nil {
 		log.Error("Error getting last trie")
 		return nil, nil, nil, nil, err

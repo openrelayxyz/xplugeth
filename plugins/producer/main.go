@@ -303,7 +303,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	log.Error("Cardinal EVM plugin initialized")
 
 	for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Error("from block updater", "response", updater.ExternUpdatesTest())
+		log.Info("block updater module located", "response", updater.ExternUpdatesTest())
 		
 	}
 
