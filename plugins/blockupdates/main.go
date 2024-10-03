@@ -203,7 +203,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 			log.Debug("Stored state update", "root", su.root)
 		}
 	}()
-	log.Info("Initialized node block updater plugin")
+	log.Info("block updater plugin initialized")
 }
 
 
