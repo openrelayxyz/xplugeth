@@ -20,6 +20,7 @@ type pluginLoader struct {
 	hookInterfaces []reflect.Type
 	hooks map[reflect.Type][]any
 	moduleValues []reflect.Value
+	names map[string]reflect.Type
 
 	singletons map[reflect.Type]any
 }
@@ -28,8 +29,9 @@ func (pl *pluginLoader) registerHook(t reflect.Type) {
 	pl.hookInterfaces = append(pl.hookInterfaces, t)
 }
 
-func (pl *pluginLoader) registerModule(t reflect.Type) {
+func (pl *pluginLoader) registerModule(t reflect.Type, name string) {
 	pl.modules = append(pl.modules, t)
+	pl.names[name] = reflect.Type
 }
 
 func (pl *pluginLoader) initialize(dirpath string) {
@@ -73,6 +75,11 @@ func (pl *pluginLoader) getSingleton(t reflect.Type) (any, bool) {
 	return v, ok
 }
 
+func (pl *pluginLoader) hasModule(name string) bool {
+	_, ok := pl.names[name]
+	return ok
+}
+
 var pl *pluginLoader
 
 func init() {
@@ -84,8 +91,8 @@ func init() {
 	}
 }
 
-func RegisterModule[t any]() {
-	pl.registerModule(reflect.TypeFor[t]())
+func RegisterModule[t any](name string) {
+	pl.registerModule(reflect.TypeFor[t](), name)
 }
 
 func RegisterHook[t any]() {
@@ -120,6 +127,10 @@ func GetSingleton[t any]() (t, bool) {
 		return x, ok
 	}
 	return v.(t), ok
+}
+
+func HasModule(name string) bool {
+	return pl.hasModule(name)
 }
 
 func GetConfig[T any](name string) (*T, bool) {

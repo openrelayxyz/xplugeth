@@ -12,6 +12,7 @@ import (
 	
 
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/core"
 	"github.com/openrelayxyz/xplugeth/types"
 	
 	"github.com/ethereum/go-ethereum/common"
@@ -420,3 +421,8 @@ func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rp
 	 },
  }
 }
+
+var (
+	_ core.InitializeNode = (*blockUpdatesModule)(nil)
+	_ api.GetAPIs = (*blockUpdatesModule)(nil)
+)
