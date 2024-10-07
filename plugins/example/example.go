@@ -14,7 +14,7 @@ import (
 type exampleModule struct {}
 
 func init() {
-	xplugeth.RegisterModule[exampleModule]()
+	xplugeth.RegisterModule[exampleModule]("example")
 }
 
 type ExampleConfig struct {
