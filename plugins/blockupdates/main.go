@@ -12,7 +12,12 @@ import (
 	
 
 	"github.com/openrelayxyz/xplugeth"
-	"github.com/openrelayxyz/xplugeth/hooks/core"
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
+	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
+	"github.com/openrelayxyz/xplugeth/hooks/initialize"
+	"github.com/openrelayxyz/xplugeth/hooks/modifyancients"
+	"github.com/openrelayxyz/xplugeth/hooks/stateupdates"
+
 	"github.com/openrelayxyz/xplugeth/types"
 	
 	"github.com/ethereum/go-ethereum/common"
@@ -161,10 +166,6 @@ type externalProducerPostReorg interface {
 	BUPostReorg(common.Hash, []common.Hash, []common.Hash)
 }
 
-type externalTestPlugin interface {
-	ExternProducerTest() string
-}
-
 type blockUpdatesModule struct {
 	backend types.Backend
 }
@@ -173,13 +174,8 @@ type blockUpdatesAPI struct {
 	backend types.Backend
 }
 
-func (*blockUpdatesModule) ExternUpdatesTest() string {
-	return "calling from blockUpdater"
-}
-
 func init() {
-	xplugeth.RegisterModule[blockUpdatesModule]()
-	xplugeth.RegisterHook[externalTestPlugin]()
+	xplugeth.RegisterModule[blockUpdatesModule]("blockUpdatesModule")
 	xplugeth.RegisterHook[externalProducerBlockUpdates]()
 	xplugeth.RegisterHook[externalProducerPreReorg]()
 	xplugeth.RegisterHook[externalProducerPostReorg]()
@@ -195,12 +191,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	cache, _ = lru.New(128)
 	recentEmits, _ = lru.New(128)
 	suCh = make(chan *stateUpdateWithRoot, 128)
-	log.Error("Initialized node block updater plugin")
-
-	for _, extern := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Error("from cardinal plugin", "response", extern.ExternProducerTest())
-		
-	}
+	
 	go func () {
 		db := b.ChainDb()
 		for su := range suCh {
@@ -214,6 +205,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 			log.Debug("Stored state update", "root", su.root)
 		}
 	}()
+	log.Info("block updater plugin initialized")
 }
 
 
@@ -422,7 +414,21 @@ func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rp
  }
 }
 
+func (b *blockUpdatesAPI) BlockUpdatesAPITest(context.Context) string {
+	var notNill bool
+	if b.backend != nil {
+		notNill = true
+	}
+	return fmt.Sprintf("Reprting from producer, the stack object is not nil: %v", notNill)
+}
+
 var (
-	_ core.InitializeNode = (*blockUpdatesModule)(nil)
-	_ api.GetAPIs = (*blockUpdatesModule)(nil)
+	_ initialize.Initializer = (*blockUpdatesModule)(nil)
+	_ apis.GetAPIs = (*blockUpdatesModule)(nil)
+	_ stateupdates.StateUpdatePlugin = (*blockUpdatesModule)(nil)
+	_ blockchain.NewHeadPlugin = (*blockUpdatesModule)(nil)
+	// _ blockchain.NewSideBlockPlugin = (*blockUpdatesModule)(nil)
+	_ blockchain.ReorgPlugin = (*blockUpdatesModule)(nil)
+	_ modifyancients.ModifyAncientsPlugin = (*blockUpdatesModule)(nil)
+	
 )

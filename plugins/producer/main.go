@@ -11,7 +11,10 @@ import (
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
-	
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
+	"github.com/openrelayxyz/xplugeth/hooks/initialize"
+	"github.com/openrelayxyz/xplugeth/hooks/triecommit"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
@@ -34,7 +37,6 @@ import (
 // the imports below are bringing in other plugins which have to be present for the producer to function properly
 import (
 	_ "github.com/openrelayxyz/xplugeth/plugins/blockupdates"
-	_ "github.com/openrelayxyz/xplugeth/plugins/merge"
 )
 
 type cardinalProducerModule struct {
@@ -42,32 +44,23 @@ type cardinalProducerModule struct {
 	backend types.Backend
 }
 
-type externalBlockUpdates interface {
+type ExternalBlockUpdates interface {
 	BlockUpdatesByNumber(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 }
 
-type externalAddBlock interface {
+type ExternalAddBlock interface {
 	CardinalAddBlockHook(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{})
 }
 
-type externalTestPlugin interface {
-	ExternUpdatesTest() string
-}
-
-type externalStreamSchema interface {
+type ExternalStreamSchema interface {
 	UpdateStreamsSchema(map[string]string)
 }
 
 func init() {
-	xplugeth.RegisterModule[cardinalProducerModule]()
-	xplugeth.RegisterHook[externalBlockUpdates]()
-	xplugeth.RegisterHook[externalAddBlock]()
-	xplugeth.RegisterHook[externalStreamSchema]()
-	xplugeth.RegisterHook[externalTestPlugin]()
-}
-
-func (*cardinalProducerModule) ExternProducerTest() string {
-	return "calling from caridnal producer"
+	xplugeth.RegisterModule[cardinalProducerModule]("cardinalProducerModule")
+	xplugeth.RegisterHook[ExternalBlockUpdates]()
+	xplugeth.RegisterHook[ExternalAddBlock]()
+	xplugeth.RegisterHook[ExternalStreamSchema]()
 }
 
 var (
@@ -95,6 +88,10 @@ func strPtr(x string) *string {
 
 func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 
+	if present := xplugeth.HasModule("blockUpdatesModule"); !present {
+		panic("blockUpdates plugin not detected from cardinal plugin")
+	}
+
 	var ok bool
 	cfg, ok = xplugeth.GetConfig[ProducerConfig]("producer")
 	if !ok {
@@ -110,12 +107,12 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	chainid = config.ChainID.Int64()
 	pendingReorgs = make(map[common.Hash]func())
 
-	for _, updater := range xplugeth.GetModules[externalBlockUpdates]() {
+	for _, updater := range xplugeth.GetModules[ExternalBlockUpdates]() {
 		blockUpdatesByNumber = updater.BlockUpdatesByNumber
 	}
 
 	addBlockFns := []func(int64, ctypes.Hash, ctypes.Hash, *big.Int, map[string][]byte, map[string]struct{}){}
-	for _, extern := range xplugeth.GetModules[externalAddBlock]() {
+	for _, extern := range xplugeth.GetModules[ExternalAddBlock]() {
 		addBlockFns = append(addBlockFns, extern.CardinalAddBlockHook)
 	}
 
@@ -154,7 +151,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	}
 
 	// Let plugins add schema updates for any values they will provide.
-	for _, extern := range xplugeth.GetModules[externalStreamSchema]() {
+	for _, extern := range xplugeth.GetModules[ExternalStreamSchema]() {
 		extern.UpdateStreamsSchema(schema)
 	}
 
@@ -301,13 +298,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 			}()
 		}
 	}
-	log.Error("Cardinal EVM plugin initialized")
-
-	for _, updater := range xplugeth.GetModules[externalTestPlugin]() {
-		log.Error("from block updater", "response", updater.ExternUpdatesTest())
-		
-	}
-
+	log.Info("Cardinal EVM plugin initialized")
 }
 
 type receiptMeta struct {
@@ -560,7 +551,7 @@ func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNum
 
 func (c *cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
-	for _, extern := range xplugeth.GetModules[externalBlockUpdates]() {
+	for _, extern := range xplugeth.GetModules[ExternalBlockUpdates]() {
 		v = extern.BlockUpdatesByNumber
 	}
 	if v == nil { log.Warn("Could not load BlockUpdatesByNumber. cardinal_reproduceBlocks will not be available") }
@@ -584,10 +575,17 @@ func (c *cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend
 	}
 }
 
-func (c *cardinalAPI) CardinalTest(context.Context) string {
+func (c *cardinalAPI) CardinalAPITest(context.Context) string {
 	var notNill bool
 	if c.stack != nil {
 		notNill = true
 	}
-	return fmt.Sprintf("Reprting from producer, the stack object is not nil: %v", notNill)
+	return fmt.Sprintf("Reporting from producer, the stack object is not nil: %v", notNill)
 }
+
+var (
+	_ initialize.Initializer = (*cardinalProducerModule)(nil)
+	_ apis.GetAPIs = (*cardinalProducerModule)(nil)
+	_ triecommit.PostTrieCommit = (*cardinalProducerModule)(nil)
+	_ triecommit.PreTrieCommit = (*cardinalProducerModule)(nil)
+)
