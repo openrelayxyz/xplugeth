@@ -1,4 +1,4 @@
-package core
+package initialize
 
 import (
 	"github.com/openrelayxyz/xplugeth"
@@ -7,15 +7,15 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 )
 
-
-type Initializer interface {
-	InitializeNode(*node.Node, types.Backend)
-}
 type Shutdown interface {
 	Shutdown()
 }
 type Blockchain interface {
 	Blockchain()	
+}
+
+type Initializer interface {
+	InitializeNode(*node.Node, types.Backend)
 }
 
 func init() {

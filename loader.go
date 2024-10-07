@@ -31,7 +31,11 @@ func (pl *pluginLoader) registerHook(t reflect.Type) {
 
 func (pl *pluginLoader) registerModule(t reflect.Type, name string) {
 	pl.modules = append(pl.modules, t)
-	pl.names[name] = reflect.Type
+	if pl.names == nil {
+		n := make(map[string]reflect.Type)
+		pl.names = n
+	}
+	pl.names[name] = t
 }
 
 func (pl *pluginLoader) initialize(dirpath string) {
