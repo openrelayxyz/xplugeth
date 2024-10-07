@@ -12,6 +12,12 @@ import (
 	
 
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
+	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
+	"github.com/openrelayxyz/xplugeth/hooks/initialize"
+	"github.com/openrelayxyz/xplugeth/hooks/modifyancients"
+	"github.com/openrelayxyz/xplugeth/hooks/stateupdates"
+
 	"github.com/openrelayxyz/xplugeth/types"
 	
 	"github.com/ethereum/go-ethereum/common"
@@ -168,12 +174,8 @@ type blockUpdatesAPI struct {
 	backend types.Backend
 }
 
-func (*blockUpdatesModule) ExternUpdatesTest() string {
-	return "calling from blockUpdater"
-}
-
 func init() {
-	xplugeth.RegisterModule[blockUpdatesModule]()
+	xplugeth.RegisterModule[blockUpdatesModule]("blockUpdatesModule")
 	xplugeth.RegisterHook[externalProducerBlockUpdates]()
 	xplugeth.RegisterHook[externalProducerPreReorg]()
 	xplugeth.RegisterHook[externalProducerPostReorg]()
@@ -412,10 +414,20 @@ func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rp
  }
 }
 
-func (b *blockUpdatesAPI) BlockUpdatesTest(context.Context) string {
+func (b *blockUpdatesAPI) BlockUpdatesAPITest(context.Context) string {
 	var notNill bool
 	if b.backend != nil {
 		notNill = true
 	}
-	return fmt.Sprintf("Reprting from blockupdates, the backend object is not nil: %v", notNill)
+	return fmt.Sprintf("Reprting from producer, the stack object is not nil: %v", notNill)
 }
+
+var (
+	_ initialize.Initializer = (*blockUpdatesModule)(nil)
+	_ apis.GetAPIs = (*blockUpdatesModule)(nil)
+	_ stateupdates.StateUpdatePlugin = (*blockUpdatesModule)(nil)
+	_ blockchain.NewHeadPlugin = (*blockUpdatesModule)(nil)
+	_ blockchain.ReorgPlugin = (*blockUpdatesModule)(nil)
+	_ modifyancients.ModifyAncientsPlugin = (*blockUpdatesModule)(nil)
+	
+)
