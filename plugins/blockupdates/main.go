@@ -281,7 +281,6 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 
 	receipts := result["receipts"].(gtypes.Receipts)
 	su := result["stateUpdates"].(*stateUpdate)
-	log.Debug("temp things", "things", []interface{}{&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code})
 	for _, extern := range xplugeth.GetModules[ExternalProducerBlockUpdates]() {
 		extern.BlockUpdates(&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code)
 	}
