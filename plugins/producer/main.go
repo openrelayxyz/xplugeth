@@ -36,16 +36,12 @@ import (
 
 // the imports below are bringing in other plugins which have to be present for the producer to function properly
 import (
-	_ "github.com/openrelayxyz/xplugeth/plugins/blockupdates"
+	"github.com/openrelayxyz/xplugeth/plugins/blockupdates"
 )
 
 type cardinalProducerModule struct {
 	stack   *node.Node
 	backend types.Backend
-}
-
-type ExternalBlockUpdates interface {
-	BlockUpdatesByNumber(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 }
 
 type ExternalAddBlock interface {
@@ -58,7 +54,8 @@ type ExternalStreamSchema interface {
 
 func init() {
 	xplugeth.RegisterModule[cardinalProducerModule]("cardinalProducerModule")
-	xplugeth.RegisterHook[ExternalBlockUpdates]()
+
+	// xplugeth.RegisterHook[ExternalBlockUpdates]()
 	xplugeth.RegisterHook[ExternalAddBlock]()
 	xplugeth.RegisterHook[ExternalStreamSchema]()
 }
@@ -86,7 +83,7 @@ func strPtr(x string) *string {
 	return &x
 }
 
-func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
+func (c *cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 
 	if present := xplugeth.HasModule("blockUpdatesModule"); !present {
 		panic("blockUpdates plugin not detected from cardinal plugin")
@@ -107,7 +104,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	chainid = config.ChainID.Int64()
 	pendingReorgs = make(map[common.Hash]func())
 
-	for _, updater := range xplugeth.GetModules[ExternalBlockUpdates]() {
+	for _, updater := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
 		blockUpdatesByNumber = updater.BlockUpdatesByNumber
 	}
 
@@ -311,7 +308,7 @@ type receiptMeta struct {
 	LogOffset uint
 }
 
-func BUPreReorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+func (*cardinalProducerModule) BUPreReorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
 	block, err := backend.BlockByHash(context.Background(), common)
 	if err != nil {
 		log.Error("Could not get block for reorg", "hash", common, "err", err)
@@ -393,7 +390,7 @@ func (r *resumer) BlocksFrom(ctx context.Context, number uint64, hash ctypes.Has
 	return ch, nil
 }
 
-func BUPostReorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
+func (*cardinalProducerModule) BUPostReorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
 	if done, ok := pendingReorgs[common]; ok {
 		done()
 		delete(pendingReorgs, common)
@@ -551,7 +548,7 @@ func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNum
 
 func (c *cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
-	for _, extern := range xplugeth.GetModules[ExternalBlockUpdates]() {
+	for _, extern := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
 		v = extern.BlockUpdatesByNumber
 	}
 	if v == nil { log.Warn("Could not load BlockUpdatesByNumber. cardinal_reproduceBlocks will not be available") }
@@ -588,4 +585,8 @@ var (
 	_ apis.GetAPIs = (*cardinalProducerModule)(nil)
 	_ triecommit.PostTrieCommit = (*cardinalProducerModule)(nil)
 	_ triecommit.PreTrieCommit = (*cardinalProducerModule)(nil)
+
+	_ blockupdates.ExternalProducerPreReorg = (*cardinalProducerModule)(nil)
+	_ blockupdates.ExternalProducerPostReorg = (*cardinalProducerModule)(nil)
+	_ blockupdates.ExternalProducerBlockUpdates = (*cardinalProducerModule)(nil)
 )

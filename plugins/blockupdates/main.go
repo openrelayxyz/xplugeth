@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-
 var (
 	sessionBackend types.Backend
 	cache *lru.Cache
@@ -154,16 +153,20 @@ func (su *stateUpdate) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-type externalProducerBlockUpdates interface {
+type ExternalProducerBlockUpdates interface {
 	BlockUpdates(*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte)
 }
 
-type externalProducerPreReorg interface {
+type ExternalProducerPreReorg interface {
 	BUPreReorg(common.Hash, []common.Hash, []common.Hash)
 }
 
-type externalProducerPostReorg interface {
+type ExternalProducerPostReorg interface {
 	BUPostReorg(common.Hash, []common.Hash, []common.Hash)
+}
+
+type InternalBlockUpdates interface {
+	BlockUpdatesByNumber(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 }
 
 type blockUpdatesModule struct {
@@ -176,9 +179,12 @@ type blockUpdatesAPI struct {
 
 func init() {
 	xplugeth.RegisterModule[blockUpdatesModule]("blockUpdatesModule")
-	xplugeth.RegisterHook[externalProducerBlockUpdates]()
-	xplugeth.RegisterHook[externalProducerPreReorg]()
-	xplugeth.RegisterHook[externalProducerPostReorg]()
+
+	xplugeth.RegisterHook[ExternalProducerBlockUpdates]()
+	xplugeth.RegisterHook[ExternalProducerPreReorg]()
+	xplugeth.RegisterHook[ExternalProducerPostReorg]()
+
+	xplugeth.RegisterHook[InternalBlockUpdates]()
 }
 
 // InitializeNode is invoked by the plugin loader when the node and Backend are
@@ -276,7 +282,7 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 	receipts := result["receipts"].(gtypes.Receipts)
 	su := result["stateUpdates"].(*stateUpdate)
 	log.Debug("temp things", "things", []interface{}{&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code})
-	for _, extern := range xplugeth.GetModules[externalProducerBlockUpdates]() {
+	for _, extern := range xplugeth.GetModules[ExternalProducerBlockUpdates]() {
 		extern.BlockUpdates(&block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code)
 	}
 	
@@ -284,7 +290,7 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 }
 
 func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, newChain []common.Hash) {
-	for _, extern := range xplugeth.GetModules[externalProducerPreReorg]() {
+	for _, extern := range xplugeth.GetModules[ExternalProducerPreReorg]() {
 		extern.BUPreReorg(common, oldChain, newChain)
 	}
 
@@ -299,7 +305,7 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 		newHead(*block, blockHash, td)
 	}
 
-	for _, extern := range xplugeth.GetModules[externalProducerPostReorg]() {
+	for _, extern := range xplugeth.GetModules[ExternalProducerPostReorg]() {
 		extern.BUPostReorg(common, oldChain, newChain)
 	}
 }
@@ -419,16 +425,16 @@ func (b *blockUpdatesAPI) BlockUpdatesAPITest(context.Context) string {
 	if b.backend != nil {
 		notNill = true
 	}
-	return fmt.Sprintf("Reprting from producer, the stack object is not nil: %v", notNill)
+	return fmt.Sprintf("Reprting from blockUpdates, the stack object is not nil: %v", notNill)
 }
 
 var (
-	_ initialize.Initializer = (*blockUpdatesModule)(nil)
 	_ apis.GetAPIs = (*blockUpdatesModule)(nil)
-	_ stateupdates.StateUpdatePlugin = (*blockUpdatesModule)(nil)
 	_ blockchain.NewHeadPlugin = (*blockUpdatesModule)(nil)
-	// _ blockchain.NewSideBlockPlugin = (*blockUpdatesModule)(nil)
 	_ blockchain.ReorgPlugin = (*blockUpdatesModule)(nil)
+	_ initialize.Initializer = (*blockUpdatesModule)(nil)
 	_ modifyancients.ModifyAncientsPlugin = (*blockUpdatesModule)(nil)
-	
+	_ stateupdates.StateUpdatePlugin = (*blockUpdatesModule)(nil)
+
+	_ InternalBlockUpdates = (*blockUpdatesModule)(nil)
 )

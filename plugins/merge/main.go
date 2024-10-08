@@ -16,7 +16,7 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 )
 
-// by importing the cardinal plugin below we can create an import chain which enables us to require importing only this plugin into geth
+// by importing the cardinal plugin below create an import chain which enables us to only require importing this plugin into geth
 import (
 	"github.com/openrelayxyz/xplugeth/plugins/producer"
 )
@@ -62,7 +62,6 @@ func getSafeFinalized() (*big.Int, *big.Int) {
 }
 
 func (*mergePlugin) CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
-	log.Info("add cardinalBlockHook")
 	if !postMerge {
 		v, _ := backend.ChainDb().Get([]byte("eth2-transition"))
 		if len(v) > 0 {
