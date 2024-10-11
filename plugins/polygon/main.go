@@ -6,41 +6,49 @@ import (
 	"math/big"
 	"regexp"
 
-	core "github.com/ethereum/go-ethereum/core/types"
-	glog "github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/initialize"
+	"github.com/openrelayxyz/xplugeth/types"
+
 	ctypes "github.com/openrelayxyz/cardinal-types"
 	"github.com/openrelayxyz/cardinal-types/hexutil"
-	"github.com/openrelayxyz/xplugeth"
-	"github.com/openrelayxyz/xplugeth/types"
+	
+	core "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type polygonPlugin struct{}
+// by importing the cardinal plugin below create an import chain which enables us to only require importing this plugin into geth
+import (
+	"github.com/openrelayxyz/xplugeth/plugins/producer"
+)
 
-func init() {
-	xplugeth.RegisterModule[polygonPlugin]()
-}
-
-var (
-	log       glog.Logger
-	postMerge bool
+type polygonPlugin struct{
 	backend   types.Backend
 	stack     node.Node
 	chainid   int64
-	client    types.Client
-)
-
-func (*polygonPlugin) InitializeNode(s *node.Node, b types.Backend) {
-	stack = *s
-	backend = b
-	chainid = b.ChainConfig().ChainID.Int64()
-
-	client = stack.Attach()
-	log.Info("Cardinal EVM resetting log level")
+	client    *rpc.Client
 }
 
-func UpdateStreamsSchema(schema map[string]string) {
+func init() {
+	xplugeth.RegisterModule[polygonPlugin]("polygonPlugin")
+}
+
+func (p *polygonPlugin) InitializeNode(s *node.Node, b types.Backend) {
+	p.stack = *s
+	p.backend = b
+	p.chainid = b.ChainConfig().ChainID.Int64()
+	p.client = s.Attach()
+
+	if present := xplugeth.HasModule("cardinalProducerModule"); !present {
+		panic("cardinal plugin not detected from polygon plugin")
+	}
+	log.Info("initialized Cardinal EVM polygon plugin")
+}
+
+func (*polygonPlugin) UpdateStreamsSchema(schema map[string]string) {
 	acctRe := regexp.MustCompile("c/([0-9a-z]+)/a/")
 	var cid string
 	for k := range schema {
@@ -57,8 +65,8 @@ func UpdateStreamsSchema(schema map[string]string) {
 	schema[fmt.Sprintf("c/%v/b/[0-9a-z]+/bs", cid)] = schema[fmt.Sprintf("c/%v/b/[0-9a-z]+/h", cid)]
 }
 
-func CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
-	if client == nil {
+func (p *polygonPlugin) CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
+	if p.client == nil {
 		log.Warn("Failed to initialize RPC client, cannot process block")
 		return
 	}
@@ -72,19 +80,26 @@ func CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.In
 
 	if number%sprint == 0 {
 		var borsnap json.RawMessage
-		if err := client.Call(&borsnap, "bor_getSnapshot", hexutil.Uint64(number)); err != nil {
+		if err := p.client.Call(&borsnap, "bor_getSnapshot", hexutil.Uint64(number)); err != nil {
 			log.Error("Error retrieving bor snapshot on block %v", number)
 		}
-		updates[fmt.Sprintf("c/%x/b/%x/bs", uint64(chainid), hash.Bytes())] = borsnap
+		updates[fmt.Sprintf("c/%x/b/%x/bs", uint64(p.chainid), hash.Bytes())] = borsnap
 	}
 
 	var receipt core.Receipt
-	if err := client.Call(&receipt, "eth_getBorBlockReceipt", hash); err != nil {
+	if err := p.client.Call(&receipt, "eth_getBorBlockReceipt", hash); err != nil {
 		log.Debug("No bor receipt", "blockno", number, "hash", hash, "err", err)
 		return
 	}
-	updates[fmt.Sprintf("c/%x/b/%x/br/%x", uint64(chainid), hash.Bytes(), receipt.TransactionIndex)] = receipt.Bloom.Bytes()
+	updates[fmt.Sprintf("c/%x/b/%x/br/%x", uint64(p.chainid), hash.Bytes(), receipt.TransactionIndex)] = receipt.Bloom.Bytes()
 	for _, logRecord := range receipt.Logs {
-		updates[fmt.Sprintf("c/%x/b/%x/bl/%x/%x", chainid, hash.Bytes(), receipt.TransactionIndex, logRecord.Index)], _ = rlp.EncodeToBytes(logRecord)
+		updates[fmt.Sprintf("c/%x/b/%x/bl/%x/%x", p.chainid, hash.Bytes(), receipt.TransactionIndex, logRecord.Index)], _ = rlp.EncodeToBytes(logRecord)
 	}
 }
+
+var (
+	_ initialize.Initializer = (*polygonPlugin)(nil)
+	
+	_ producer.ExternalAddBlock = (*polygonPlugin)(nil)
+	_ producer.ExternalStreamSchema = (*polygonPlugin)(nil)
+)
