@@ -12,15 +12,8 @@ import (
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
-	// "github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	// "github.com/ethereum/go-ethereum/common/hexutil"
-	// "github.com/ethereum/go-ethereum/crypto"
-
-	// "github.com/openrelayxyz/plugeth-utils/core"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/types"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/rlp"
 )
 
 var (
@@ -28,11 +21,11 @@ var (
 )
 
 func getTrie(hash common.Hash) (state.Trie, error) {
-	stateDB, _, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithHash(hash, true))
+	tr, err := trie.NewStateTrie(trie.TrieID(common.Hash(hash)), trie.NewDatabase(backend.ChainDb(), nil))
 	if err != nil {
-		return nil ,err
+		return nil, err
 	}
-	return stateDB.GetTrie(), nil
+	return tr, nil
 }
 
 func traverseIterators(a, b trie.NodeIterator, add, delete func(k, v []byte), alter func(k1, v1, k2, v2 []byte)) {
