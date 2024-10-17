@@ -81,7 +81,7 @@ func (p *polygonPlugin) CardinalAddBlockHook(number int64, hash, parent ctypes.H
 	if number%sprint == 0 {
 		var borsnap json.RawMessage
 		if err := p.client.Call(&borsnap, "bor_getSnapshot", hexutil.Uint64(number)); err != nil {
-			log.Error("Error retrieving bor snapshot on block %v", number)
+			log.Error("Error retrieving bor snapshot", "block", number)
 		}
 		updates[fmt.Sprintf("c/%x/b/%x/bs", uint64(p.chainid), hash.Bytes())] = borsnap
 	}
