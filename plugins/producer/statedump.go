@@ -11,18 +11,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	// gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rlp"
-
-	// "github.com/openrelayxyz/plugeth-utils/core"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/types"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/hexutil"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/crypto"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/rlp"
-	// "github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 var (
