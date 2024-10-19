@@ -64,7 +64,6 @@ var (
 	ready sync.WaitGroup
 	backend types.Backend
 	stack  *node.Node
-	// config *params.ChainConfig
 	chainid int64
 	producer transports.Producer
 	startBlock uint64
@@ -106,8 +105,6 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	stack = s
 	ready.Add(1)
 	defer ready.Done()
-	// config = b.ChainConfig()
-	// chainid = config.ChainID.Int64()
 	chainid = getChainID() 
 	pendingReorgs = make(map[common.Hash]func())
 
