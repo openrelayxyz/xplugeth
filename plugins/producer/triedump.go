@@ -269,7 +269,6 @@ func stateTrieUpdatesByNumber(i int64) (map[common.Hash]struct{}, map[common.Has
 
 func trieDump (ctx cli.Context, args []string) error {
 	log.Info("Starting trie dump")
-	// chainConfig := backend.ChainConfig()
 	header := backend.CurrentHeader()
 	startBlock := int64(0)
 	endBlock := header.Number.Int64()
@@ -465,11 +464,5 @@ func compareNodes(a, b trie.NodeIterator) int {
 	} else if b.Leaf() && !a.Leaf() {
 		return 1
 	}
-	// if cmp := bytes.Compare(a.Hash().Bytes(), b.Hash().Bytes()); cmp != 0 {
-	// 	return cmp
-	// }
-	// if a.Leaf() && b.Leaf() {
-	// 	return bytes.Compare(a.LeafBlob(), b.LeafBlob())
-	// }
 	return 0
 }

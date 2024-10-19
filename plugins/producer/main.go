@@ -16,10 +16,10 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/triecommit"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -64,7 +64,6 @@ var (
 	ready sync.WaitGroup
 	backend types.Backend
 	stack  *node.Node
-	config *params.ChainConfig
 	chainid int64
 	producer transports.Producer
 	startBlock uint64
@@ -80,6 +79,13 @@ var (
 
 func strPtr(x string) *string {
 	return &x
+}
+
+func getChainID() int64 {
+	var hex hexutil.Uint64
+	c := stack.Attach()
+	c.Call(&hex, "eth_chainID")
+	return int64(hex) 
 }
 
 func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
@@ -99,8 +105,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	stack = s
 	ready.Add(1)
 	defer ready.Done()
-	config = b.ChainConfig()
-	chainid = config.ChainID.Int64()
+	chainid = getChainID() 
 	pendingReorgs = make(map[common.Hash]func())
 
 	for _, updater := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
