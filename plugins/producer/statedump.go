@@ -103,7 +103,8 @@ var (
 			blockno := uint64(header.Number.Int64())
 			td := backend.GetTd(context.Background(), header.Hash())
 
-			chainID := backend.ChainConfig().ChainID.Int64()
+			chainID := getChainID()
+			// chainID := backend.ChainConfig().ChainID.Int64()
 			acctIter := db.NewIterator(snapshotAccountPrefix, nil)
 			defer acctIter.Release()
 			jsonStream := json.NewEncoder(os.Stdout)
