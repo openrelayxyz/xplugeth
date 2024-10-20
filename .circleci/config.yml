@@ -13,11 +13,8 @@ jobs:
             card_geth_producer_version="$CIRCLE_TAG"
             card_geth_merge_version="$CIRCLE_TAG"
 
-            test_build_cardinal_bor=true
-            card_bor_producer_version="$CIRCLE_TAG"
-
             echo "curl with cardinal geth and cardinal-bor Parameters for develop branch in xplugeth"
-            curl -X POST https://circleci.com/api/v2/project/github/openrelayxyz/xplugeth-manifest/pipeline --header "Content-Type: application/json" --header "Accept: application/json" --header "Circle-Token: ${CIRCLECI_API_TOKEN}" -d '{ "branch": "circleci-project-setup", "parameters": { "test-build-cardinal-geth": '"$test_build_cardinal_geth"', "card-geth-producer-version": "'"$card_geth_producer_version"'", "card-geth-merge-version": "'"$card_geth_merge_version"'", "test-build-cardinal-bor": '"$test_build_cardinal_bor"', "card-bor-producer-version": "'"$card_bor_producer_version"'" } }'
+            curl -X POST https://circleci.com/api/v2/project/github/openrelayxyz/xplugeth-manifest/pipeline --header "Content-Type: application/json" --header "Accept: application/json" --header "Circle-Token: ${CIRCLECI_API_TOKEN}" -d '{ "branch": "circleci-project-setup", "parameters": { "test-build-cardinal-geth": '"$test_build_cardinal_geth"', "card-geth-producer-version": "'"$card_geth_producer_version"'", "card-geth-merge-version": "'"$card_geth_merge_version"'" } }'
 
 workflows:
   build_and_test_and_trigger:
