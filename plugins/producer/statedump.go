@@ -11,18 +11,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	// gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rlp"
-
-	// "github.com/openrelayxyz/plugeth-utils/core"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/types"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/hexutil"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/crypto"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/rlp"
-	// "github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 var (
@@ -103,7 +95,6 @@ var (
 			blockno := uint64(header.Number.Int64())
 			td := backend.GetTd(context.Background(), header.Hash())
 
-			chainID := backend.ChainConfig().ChainID.Int64()
 			acctIter := db.NewIterator(snapshotAccountPrefix, nil)
 			defer acctIter.Release()
 			jsonStream := json.NewEncoder(os.Stdout)
@@ -118,12 +109,12 @@ var (
 				log.Error("error encoding header to bytes, producer", "err", err)
 				return err
 			}
-			jsonStream.Encode(output{Key: fmt.Sprintf("c/%x/b/%x/h", chainID, header.Hash().Bytes()), Value: headerBytes})
+			jsonStream.Encode(output{Key: fmt.Sprintf("c/%x/b/%x/h", chainid, header.Hash().Bytes()), Value: headerBytes})
 			log.Info("Dumping state for block", "num", blockno, "hash", header.Hash())
 			for acctIter.Next() {
 				if len(acctIter.Key()) != 33 { continue }
 				hashedAddress := acctIter.Key()[1:]
-				acctKey := fmt.Sprintf("c/%x/a/%x/d", chainID, hashedAddress)
+				acctKey := fmt.Sprintf("c/%x/a/%x/d", chainid, hashedAddress)
 				jsonStream.Encode(output{Key: acctKey, Value: hexutil.Bytes(acctIter.Value())})
 				acct, err := fullAccount(acctIter.Value())
 				if err != nil {
@@ -136,7 +127,7 @@ var (
 						v, err = db.Get(acct.CodeHash)
 					}
 					if err != nil { return err }
-					codeKey := fmt.Sprintf("c/%x/c/%x", chainID, acct.CodeHash)
+					codeKey := fmt.Sprintf("c/%x/c/%x", chainid, acct.CodeHash)
 					jsonStream.Encode(output{Key: codeKey, Value: hexutil.Bytes(v)})
 				}
 				if !bytes.Equal(acct.Root, emptyRoot) {
@@ -146,7 +137,7 @@ var (
 						count++
 						if len(slotIter.Key()) != 65 { continue }
 						slot := slotIter.Key()[33:]
-						slotKey := fmt.Sprintf("c/%x/a/%x/s/%x", chainID, hashedAddress, slot)
+						slotKey := fmt.Sprintf("c/%x/a/%x/s/%x", chainid, hashedAddress, slot)
 						jsonStream.Encode(output{Key: slotKey, Value: hexutil.Bytes(slotIter.Value())})
 					}
 					if err := slotIter.Error(); err != nil { return err }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 )
 
@@ -43,7 +44,13 @@ func init() {
 func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
 	stack = *s
 	backend = b
-	chainid = b.ChainConfig().ChainID.Int64()
+
+	var ok bool
+	chainid, ok = utils.GetChainID() 
+	if !ok {
+		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, merge"))
+	}
+
 	if present := xplugeth.HasModule("cardinalProducerModule"); !present {
 		panic("cardinal plugin not detected from merge plugin")
 	}

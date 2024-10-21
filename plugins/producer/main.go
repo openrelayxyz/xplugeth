@@ -11,6 +11,7 @@ import (
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/hooks/triecommit"
@@ -19,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -64,7 +64,6 @@ var (
 	ready sync.WaitGroup
 	backend types.Backend
 	stack  *node.Node
-	config *params.ChainConfig
 	chainid int64
 	producer transports.Producer
 	startBlock uint64
@@ -99,10 +98,12 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	stack = s
 	ready.Add(1)
 	defer ready.Done()
-	config = b.ChainConfig()
-	chainid = config.ChainID.Int64()
 	pendingReorgs = make(map[common.Hash]func())
-
+	chainid, ok = utils.GetChainID() 
+	if !ok {
+		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, producer"))
+	}
+	
 	for _, updater := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
 		blockUpdatesByNumber = updater.BlockUpdatesByNumber
 	}
