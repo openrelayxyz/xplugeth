@@ -12,15 +12,8 @@ import (
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
-	// "github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
-	// "github.com/ethereum/go-ethereum/common/hexutil"
-	// "github.com/ethereum/go-ethereum/crypto"
-
-	// "github.com/openrelayxyz/plugeth-utils/core"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/types"
-	// "github.com/openrelayxyz/plugeth-utils/restricted/rlp"
 )
 
 var (
@@ -276,7 +269,6 @@ func stateTrieUpdatesByNumber(i int64) (map[common.Hash]struct{}, map[common.Has
 
 func trieDump (ctx cli.Context, args []string) error {
 	log.Info("Starting trie dump")
-	// chainConfig := backend.ChainConfig()
 	header := backend.CurrentHeader()
 	startBlock := int64(0)
 	endBlock := header.Number.Int64()
@@ -472,11 +464,5 @@ func compareNodes(a, b trie.NodeIterator) int {
 	} else if b.Leaf() && !a.Leaf() {
 		return 1
 	}
-	// if cmp := bytes.Compare(a.Hash().Bytes(), b.Hash().Bytes()); cmp != 0 {
-	// 	return cmp
-	// }
-	// if a.Leaf() && b.Leaf() {
-	// 	return bytes.Compare(a.LeafBlob(), b.LeafBlob())
-	// }
 	return 0
 }
