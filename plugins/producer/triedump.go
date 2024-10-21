@@ -21,11 +21,11 @@ var (
 )
 
 func getTrie(hash common.Hash) (state.Trie, error) {
-	tr, err := trie.NewStateTrie(trie.TrieID(common.Hash(hash)), trie.NewDatabase(backend.ChainDb(), nil))
+	stateDB, _, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithHash(hash, true))
 	if err != nil {
-		return nil, err
+		return nil ,err
 	}
-	return tr, nil
+	return stateDB.GetTrie(), nil
 }
 
 func traverseIterators(a, b trie.NodeIterator, add, delete func(k, v []byte), alter func(k1, v1, k2, v2 []byte)) {
