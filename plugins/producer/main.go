@@ -11,12 +11,12 @@ import (
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/hooks/triecommit"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/node"
@@ -81,13 +81,6 @@ func strPtr(x string) *string {
 	return &x
 }
 
-func getChainID() int64 {
-	var hex hexutil.Uint64
-	c := stack.Attach()
-	c.Call(&hex, "eth_chainID")
-	return int64(hex) 
-}
-
 func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 
 	if present := xplugeth.HasModule("blockUpdatesModule"); !present {
@@ -105,9 +98,12 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	stack = s
 	ready.Add(1)
 	defer ready.Done()
-	chainid = getChainID() 
 	pendingReorgs = make(map[common.Hash]func())
-
+	chainid, ok = utils.GetChainID() 
+	if !ok {
+		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, producer"))
+	}
+	
 	for _, updater := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
 		blockUpdatesByNumber = updater.BlockUpdatesByNumber
 	}
