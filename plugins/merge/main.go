@@ -43,7 +43,12 @@ func init() {
 func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
 	stack = *s
 	backend = b
-	chainid = b.ChainConfig().ChainID.Int64()
+
+	var hex hexutil.Uint64
+	c := stack.Attach()
+	c.Call(&hex, "eth_chainID")
+	chainid = int64(hex)
+
 	if present := xplugeth.HasModule("cardinalProducerModule"); !present {
 		panic("cardinal plugin not detected from merge plugin")
 	}
