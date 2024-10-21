@@ -3,9 +3,7 @@ package types
 import (
 	"context"
 	"math/big"
-	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -13,9 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"time"
 )
 
 
@@ -23,18 +19,18 @@ import (
 // both full and light clients) with access to necessary functions.
 type Backend interface {
 	// General Ethereum API
-	SyncProgress() ethereum.SyncProgress
+	// SyncProgress() ethereum.SyncProgress
 
-	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
-	FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error)
-	BlobBaseFee(ctx context.Context) *big.Int
+	// SuggestGasTipCap(ctx context.Context) (*big.Int, error)
+	// FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error)
+	// BlobBaseFee(ctx context.Context) *big.Int
 	ChainDb() ethdb.Database
 	AccountManager() *accounts.Manager
-	ExtRPCEnabled() bool
-	RPCGasCap() uint64            // global gas cap for eth_call over rpc: DoS protection
-	RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
-	RPCTxFeeCap() float64         // global tx fee cap for all transaction related APIs
-	UnprotectedAllowed() bool     // allows only for EIP155 transactions.
+	// ExtRPCEnabled() bool
+	// RPCGasCap() uint64            // global gas cap for eth_call over rpc: DoS protection
+	// RPCEVMTimeout() time.Duration // global timeout for eth_call over rpc: DoS protection
+	// RPCTxFeeCap() float64         // global tx fee cap for all transaction related APIs
+	// UnprotectedAllowed() bool     // allows only for EIP155 transactions.
 
 	// Blockchain API
 	SetHead(number uint64)
@@ -48,7 +44,7 @@ type Backend interface {
 	BlockByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*types.Block, error)
 	StateAndHeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*state.StateDB, *types.Header, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error)
-	Pending() (*types.Block, types.Receipts, *state.StateDB)
+	// Pending() (*types.Block, types.Receipts, *state.StateDB)
 	GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error)
 	GetTd(ctx context.Context, hash common.Hash) *big.Int
 	GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM
@@ -58,7 +54,7 @@ type Backend interface {
 
 	// Transaction pool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
-	GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
+	// GetTransaction(ctx context.Context, txHash common.Hash) (bool, *types.Transaction, common.Hash, uint64, uint64, error)
 	GetPoolTransactions() (types.Transactions, error)
 	GetPoolTransaction(txHash common.Hash) *types.Transaction
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
@@ -67,18 +63,20 @@ type Backend interface {
 	TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction)
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
-	ChainConfig() *params.ChainConfig
+	// ChainConfig() *params.ChainConfig
 
 	// This is copied from filters.Backend
 	// eth/filters needs to be initialized from this backend type, so methods needed by
 	// it must also be included here.
-	GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
-	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
+	// GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
+	// GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
-	BloomStatus() (uint64, uint64)
-	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
+	// BloomStatus() (uint64, uint64)
+	// ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 }
+
+	//The commented out methods above have been excluded to allow for building across networks. Specifially the backend interface in bor. 
 
 	// TODO:
 	// InsertBlock(data []byte) error // RLP encoded block
