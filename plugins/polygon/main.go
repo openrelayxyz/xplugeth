@@ -39,8 +39,11 @@ func init() {
 func (p *polygonPlugin) InitializeNode(s *node.Node, b types.Backend) {
 	p.stack = *s
 	p.backend = b
-	p.chainid = b.ChainConfig().ChainID.Int64()
 	p.client = s.Attach()
+
+	var hex hexutil.Uint64
+	p.client.Call(&hex, "eth_chainID")
+	p.chainid = int64(hex)
 
 	if present := xplugeth.HasModule("cardinalProducerModule"); !present {
 		panic("cardinal plugin not detected from polygon plugin")
