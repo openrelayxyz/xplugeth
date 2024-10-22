@@ -7,36 +7,38 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
+	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 )
 
-type trieflushModule struct{}
+type trieFlushModule struct{}
+
+type trieFlushAPI struct {}
 
 func init() {
-	xplugeth.RegisterModule[trieflushModule]()
+	xplugeth.RegisterModule[trieFlushModule]("trieFlushClone")
 }
 
-func (*trieflushModule) InitializeNode(s *node.Node, b types.Backend) {
-	log.Info("trieflushinterval plugin initialized")
-}
-
-func (*trieflushModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+func (*trieFlushModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   &trieflushModule{},
+			Service:   &trieFlushAPI{},
 			Public:    true,
 		},
 	}
 }
 
-var nodeInterval time.Duration
+var (
+	nodeInterval time.Duration
+	ModifiedInterval time.Duration
+)
 
-var ModifiedInterval time.Duration
-
-func (*trieflushModule) SetTrieFlushIntervalClone(duration time.Duration) time.Duration {
+func (*trieFlushModule) SetTrieFlushIntervalClone(duration time.Duration) time.Duration {
 	nodeInterval = duration
 	if ModifiedInterval > 0 {
 		duration = ModifiedInterval
@@ -44,16 +46,18 @@ func (*trieflushModule) SetTrieFlushIntervalClone(duration time.Duration) time.D
 	return duration
 }
 
-func (*trieflushModule) SetTrieFlushInterval(ctx context.Context, interval string) error {
+func (*trieFlushAPI) SetTrieFlushInterval(ctx context.Context, interval string) error {
 	newInterval, err := time.ParseDuration(interval)
 	if err != nil {
 		return err
 	}
+	log.Info("flush interval set from plugin", "interval", interval)
 	ModifiedInterval = newInterval
 
 	return nil
 }
 
-func (*trieflushModule) Test(context.Context) string {
-	return "test successful"
-}
+var (
+	_ apis.GetAPIs = (*trieFlushModule)(nil)
+	_ blockchain.SetTrieFlushIntervalClonePlugin = (*trieFlushModule)(nil)
+)
