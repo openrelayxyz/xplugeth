@@ -1,0 +1,28 @@
+version: 2.1
+
+jobs:
+  trigger-xplugeth-manifest:
+    docker:
+      - image: cimg/base:current
+
+    steps:
+      - run:
+          name: Prep paramters and the curl
+          command: |
+            test_build_cardinal_geth=true
+            card_geth_producer_version="$CIRCLE_TAG"
+            card_geth_merge_version="$CIRCLE_TAG"
+
+            echo "curl with cardinal geth and cardinal-bor Parameters for develop branch in xplugeth"
+            curl -X POST https://circleci.com/api/v2/project/github/openrelayxyz/xplugeth-manifest/pipeline --header "Content-Type: application/json" --header "Accept: application/json" --header "Circle-Token: ${CIRCLECI_API_TOKEN}" -d '{ "branch": "circleci-project-setup", "parameters": { "test-build-cardinal-geth": '"$test_build_cardinal_geth"', "card-geth-producer-version": "'"$card_geth_producer_version"'", "card-geth-merge-version": "'"$card_geth_merge_version"'" } }'
+
+workflows:
+  build_and_test_and_trigger:
+    jobs:
+     - trigger-xplugeth-manifest:
+          context: Rivet
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              only: develop
