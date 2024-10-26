@@ -14,9 +14,27 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+
+	"github.com/openrelayxyz/xplugeth/utils"
 )
 
 func copyTestResources() error {
+	chainid, ok := utils.GetChainID() 
+	if !ok {
+		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, hooktest"))
+	}
+	var network string
+	switch chainid {
+	case 17000:
+		network = "foundation"
+	case 137:
+		network = "bor"
+	default:
+		panic(fmt.Sprintf("did not recognize chain id, hooktest"))	
+	}
+
+	log.Error("this is the network", "network", network)
+
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		return fmt.Errorf("failed to get current file path")
@@ -24,7 +42,7 @@ func copyTestResources() error {
 
 	packageDir := filepath.Dir(filename)
 
-	sourceDir := filepath.Join(packageDir, "test")
+	sourceDir := filepath.Join(packageDir, network + "-test")
 	destDir := "./test/testDataDir"
 
 	if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
@@ -88,7 +106,7 @@ func coreControlDataDecompress() (map[uint64]map[string]interface{}, error) {
 }
 
 func stateControlDataDecompress() (map[uint64]map[string]interface{}, error) {
-	file, err := os.ReadFile("./test/testDataDir/control.json.gz")
+	file, err := os.ReadFile("./test/testDataDir/state-control.json.gz")
 	if err != nil {
 		log.Error("cannot read file control.json.gz")
 		return nil, err

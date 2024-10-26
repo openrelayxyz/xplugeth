@@ -43,7 +43,9 @@ func (p *hookTest) InitializeNode(s *node.Node, b types.Backend) {
 	client = s.Attach()
 
 	log.Info("foundation test module initialized")
+}
 
+func (*hookTest) Blockchain() {
 	var err error
 
 	err = copyTestResources()
@@ -60,11 +62,9 @@ func (p *hookTest) InitializeNode(s *node.Node, b types.Backend) {
 	if err != nil {
 		log.Error("failed to load control data", "error", err)
 	}
-}
 
-func (*hookTest) Blockchain() {
-	var placeHolder interface{}
-	if err := client.Call(&placeHolder, "debug_setTrieFlushInterval", "1s"); err != nil {
+	var trieFlush interface{}
+	if err := client.Call(&trieFlush, "debug_setTrieFlushInterval", "1s"); err != nil {
 		log.Error("Error calling trie flush interval hooktest", "err", err)
 	}
 
