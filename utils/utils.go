@@ -14,6 +14,6 @@ func GetChainID() (int64, bool) {
 	}
 	var hex hexutil.Uint64
 	client := s.Attach()
-	client.Call(&hex, "eth_chainID")
+	client.Call(&hex, "eth_chainId")
 	return int64(hex), true
 }
