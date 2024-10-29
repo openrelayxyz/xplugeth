@@ -14,7 +14,7 @@ func strPtr(x string) *string {
 
 func createProducer(broker, topic string) (sarama.AsyncProducer, error) {
 
-	sessionBrokers, sessionKafkaConfig = transports.ParseKafkaURL(strings.TrimPrefix(broker, "kafka://"))
+	brokers, config = transports.ParseKafkaURL(strings.TrimPrefix(broker, "kafka://"))
 	configEntries := make(map[string]*string)
 	configEntries["retention.ms"] = strPtr("3600000")
 
@@ -22,7 +22,7 @@ func createProducer(broker, topic string) (sarama.AsyncProducer, error) {
 		panic(fmt.Sprintf("Could not create topic %v on broker %v: %v", topic, broker, err.Error()))
 	}
 
-	producer, err := sarama.NewAsyncProducer(sessionBrokers, sessionKafkaConfig)
+	producer, err := sarama.NewAsyncProducer(brokers, config)
 	if err != nil {
 		panic(fmt.Sprintf("Could not setup producer, peer manager plugin: %v", err.Error()))
 	}
@@ -32,7 +32,7 @@ func createProducer(broker, topic string) (sarama.AsyncProducer, error) {
 
 func createConsumer(broker, topic string) (sarama.PartitionConsumer, error) {
 
-	consumer, err := sarama.NewConsumer(sessionBrokers, sessionKafkaConfig)
+	consumer, err := sarama.NewConsumer(brokers, config)
 	if err != nil {
 		return nil, err
 	}

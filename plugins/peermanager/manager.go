@@ -7,24 +7,15 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type PeerManagerService struct {
+type pseudoNodeInfo struct {
+	Enode string `json:"enode"`
+}
+
+type PeerManager struct {
 	client *rpc.Client
 }
 
-type pseudoNodeInfo struct {
-	Enode string
-}
-
-func getPeerManager() (*PeerManagerService, error) {
-	c := sessionStack.Attach()
-
-	s := &PeerManagerService{
-		client: c,
-	}
-	return s, nil
-}
-
-func (service *PeerManagerService) getEnode() (string, error) {
+func (service *PeerManager) getEnode() (string, error) {
 	var enode pseudoNodeInfo
 	err := service.client.Call(&enode, "admin_nodeInfo")
 	if err != nil {
@@ -33,7 +24,7 @@ func (service *PeerManagerService) getEnode() (string, error) {
 	return enode.Enode, nil
 }
 
-func (service *PeerManagerService) attachPeers(peer string) {
+func (service *PeerManager) attachPeers(peer string) {
 
 	var addTrustedPeerResult bool
 	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
@@ -55,30 +46,26 @@ func (service *PeerManagerService) attachPeers(peer string) {
 	log.Info("added peer, peer manager plugin", "added", peer)
 }
 
-func (service *PeerManagerService) chainIdResolver() (string, error) {
-
-	var chainID string
-	err := service.client.Call(&chainID, "eth_chainId")
-	if err != nil {
-		return "", err
-	}
+func chainIdResolver(id int64) string {
 	var result string
-	switch chainID {
-	case "0x1":
+	switch id {
+	case 1:
 		result = "mainnet"
-	case "0x3d":
+	case 61:
 		result = "etc"
-	case "0x4268":
+	case 17000:
 		result = "holesky"
-	case "0xaa36a7":
+	case 11155111:
 		result = "sepolia"
-	case "0x89":
+	case 137:
 		result = "polygon"
-	case "0x13881":
+	case 80001:
 		result = "mumbai"
+	case 80002:
+		result = "amoy"
 	default:
 		log.Warn("unknown chain, chainID could not be resolved, peer manager plugin")
-		result = chainID
+		result = "unknownChain"
 	}
-	return fmt.Sprintf("peers-%v", result), nil
+	return fmt.Sprintf("peers-%v", result)
 }

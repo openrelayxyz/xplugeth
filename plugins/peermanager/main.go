@@ -4,27 +4,31 @@ import (
 	"fmt"
 
 	"github.com/Shopify/sarama"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
 )
 
 type peerManagerConfig struct {
-	BrokerURL string `yaml:"peerManager.broker.url"`
+	BrokerURL string `yaml:"broker.url"`
+	PeerTopic string `yaml:"peer.topic"`
 }
 
-var cfg *peerManagerConfig
-
 var (
-	httpApiFlagName    = "http.api"
-	sessionStack       node.Node
-	sessionBrokers     []string
-	sessionKafkaConfig *sarama.Config
+	sessionPeerService *PeerManager
+	chainid            int64
+	brokers            []string
+	config             *sarama.Config
 	nodes              = make(chan string, 5)
 	exit               = make(chan struct{}, 1)
+	cfg 			   *peerManagerConfig
 	peerBroker         string
+	peerTopic		   string
 )
 
 type peerManagerModule struct{}
@@ -34,54 +38,58 @@ func init() {
 }
 
 func (*peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
-	sessionStack = *s
+
+	sessionPeerService = &PeerManager{
+		client: s.Attach(),
+	}
+
 	var ok bool
-	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peerManager")
-	peerBroker = cfg.BrokerURL
+
+	chainid, ok = utils.GetChainID() 
 	if !ok {
+		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, peermanager"))
+	}
+
+	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
+	if !ok {
+		if cfg.BrokerURL == "" { cfg.BrokerURL = fmt.Sprintf("peermanager-%v", chainid) }
+		if cfg.PeerTopic == "" { cfg.PeerTopic = fmt.Sprintf(chainIdResolver(chainid)) }
 		log.Warn("did not acqire config, example plugin, all values set to default")
 	}
+	peerBroker = cfg.BrokerURL
+	peerTopic  = cfg.PeerTopic
+
 	log.Info("Initialized node, peer manager plugin")
 }
 
 func (*peerManagerModule) Blockchain() {
-	if peerBroker == "" {
-		panic(fmt.Sprintf("no broker provided for peer manager plugin"))
+	if sessionPeerService == nil {
+		panic(fmt.Sprintf("peer manager is nil, peer manager plugin"))
 	}
 	go peeringSequence()
 }
 
 func peeringSequence() {
-	sessionPeerService, err := getPeerManager()
-	if err != nil {
-		log.Error("session peer service unavailable, peer manager plugin", "err", err)
-		return
-	}
 
 	selfNode, err := sessionPeerService.getEnode()
 	if err != nil {
 		log.Error("error calling getEnode from sessionService, peer manager plugin", "err", err)
 	}
 
-	chainTopic, err := sessionPeerService.chainIdResolver()
-	if err != nil {
-		log.Error("Error aquiring chainID, peer manager plugin", "err", err)
-	}
-
-	producer, err := createProducer(peerBroker, chainTopic)
+	producer, err := createProducer(peerBroker, peerTopic)
 	if err != nil {
 		log.Error("failed to acquire kafka producer, peer manager plugin", "err", err)
 		return
 	}
 
-	consumer, err := createConsumer(peerBroker, chainTopic)
+	consumer, err := createConsumer(peerBroker, peerTopic)
 	if err != nil {
 		log.Error("failed to acquire kafka consumer, peer manager plugin", "err", err)
 		return
 	}
 
 	msg := &sarama.ProducerMessage{
-		Topic: chainTopic,
+		Topic: peerTopic,
 		Value: sarama.StringEncoder(selfNode),
 	}
 
