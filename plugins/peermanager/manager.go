@@ -65,7 +65,7 @@ func chainIdResolver(id int64) string {
 		result = "amoy"
 	default:
 		log.Warn("unknown chain, chainID could not be resolved, peer manager plugin")
-		result = "unknownChain"
+		result = fmt.Sprintf("%x", id)
 	}
 	return fmt.Sprintf("peers-%v", result)
 }
