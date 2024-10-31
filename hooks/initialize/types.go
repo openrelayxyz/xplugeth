@@ -21,7 +21,7 @@ type Initializer interface {
 func init() {
 	xplugeth.RegisterHook[Initializer](xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/plugeth-internal",
-		Ref: "hook_internal_foundation_0",
+		Ref: "hook_internal_foundation_1",
 		Tests: []xplugeth.Test{
 			{
 				Package: "./cmd/geth",
