@@ -26,7 +26,7 @@ func init() {
 			{
 				Package: "./cmd/geth",
 				TestNames: []string{
-					"TestMain",
+					"TestVerification",
 				},
 			},
 		},
