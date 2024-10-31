@@ -2,6 +2,11 @@ package peermanager
 
 import (
 	"fmt"
+	"net/http"
+	"encoding/json"
+	"io/ioutil"
+	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -16,12 +21,24 @@ type PeerManager struct {
 }
 
 func (service *PeerManager) getEnode() (string, error) {
-	var enode pseudoNodeInfo
-	err := service.client.Call(&enode, "admin_nodeInfo")
+
+	var	myip string
+	for {
+		if myip = getPublicIP(); myip != "" {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	var raw pseudoNodeInfo
+	err := service.client.Call(&raw, "admin_nodeInfo")
 	if err != nil {
 		return "", err
 	}
-	return enode.Enode, nil
+	parts := strings.Split(raw.Enode, "@")
+	port := strings.Split(parts[1], ":")[1]
+
+	return parts[0] + "@" + myip + ":" + port, nil
 }
 
 func (service *PeerManager) attachPeers(peer string) {
@@ -44,6 +61,33 @@ func (service *PeerManager) attachPeers(peer string) {
 		log.Error("addPeer returned false, peer manager plugin", "peer", peer, "err", err)
 	}
 	log.Info("added peer, peer manager plugin", "added", peer)
+}
+
+type myIp struct {
+	IP string `json:"ip"`
+}
+
+func getPublicIP() string {
+	resp, err := http.Get("https://myipv4.p1.opendns.com/get_my_ip")
+	if err != nil {
+		log.Error("error retrieving ip, peer manager, retrying", "err", err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	raw, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Error("error reading ip response, peer manager, retrying", "err", err)
+		return ""
+	}
+
+	var myip myIp 
+	if err := json.Unmarshal(raw, &myip); err != nil {
+		log.Error("error unmarshaling myip json, peer manager, retrying", "err", err)
+		return ""
+	} 
+
+	return myip.IP
 }
 
 func chainIdResolver(id int64) string {
