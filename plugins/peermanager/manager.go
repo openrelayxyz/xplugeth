@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -21,24 +20,13 @@ type PeerManager struct {
 }
 
 func (service *PeerManager) getEnode() (string, error) {
-
-	var	myip string
-	for {
-		if myip = getPublicIP(); myip != "" {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
-
-	var raw pseudoNodeInfo
-	err := service.client.Call(&raw, "admin_nodeInfo")
+	var pni pseudoNodeInfo
+	err := service.client.Call(&pni, "admin_nodeInfo")
 	if err != nil {
 		return "", err
 	}
-	parts := strings.Split(raw.Enode, "@")
-	port := strings.Split(parts[1], ":")[1]
 
-	return parts[0] + "@" + myip + ":" + port, nil
+	return analyzeEnode(pni.Enode), nil
 }
 
 func (service *PeerManager) attachPeers(peer string) {
@@ -65,6 +53,21 @@ func (service *PeerManager) attachPeers(peer string) {
 
 type myIp struct {
 	IP string `json:"ip"`
+}
+
+func analyzeEnode(raw string) string {
+	firstPass := strings.Split(raw, "@")
+	nodeId := firstPass[0]
+
+	secondPass := strings.Split(firstPass[1], ":")
+	ip := secondPass[0]
+	port := secondPass[1]
+
+	if ip == "127.0.0.1" {
+		if publicIP := getPublicIP(); publicIP != "" { ip = publicIP } 
+	}
+	
+	return nodeId + "@" + ip + ":" + port
 }
 
 func getPublicIP() string {
