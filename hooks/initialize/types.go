@@ -32,18 +32,6 @@ func init() {
 				},
 			},
 		},
-		xplugeth.Patchset{
-			Remote: "github.com/openrelayxyz/plugeth-internal",
-			Ref: "hook_fail_foundat_0",
-			Tests: []xplugeth.Test{
-				{
-					Package: "./cmd/geth",
-					TestNames: []string{
-						"TestFail",
-					},
-				},
-			},
-		},
 	)
 	xplugeth.RegisterHook[Shutdown]()
 	xplugeth.RegisterHook[Blockchain]()
