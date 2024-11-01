@@ -58,7 +58,7 @@ def apply_patchset(patchset):
 def apply_patch(patch):
     remote_name = "".join(random.choice(string.ascii_lowercase) for _ in range(6))
     git.remote("add", remote_name, sshRemoteTransformer(patch["remote"]))
-    git.fetch(remote_name)
+    print(git.fetch(remote_name))
     print(git("cherry-pick", patch["ref"]))
     for test in patch["tests"]:
         for testName in test["test"]:
@@ -84,9 +84,13 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
         with open(os.path.join(cmd, "xplugeth_imports.go"), "w") as fd:
             fd.write("package main\nimport (\n")
             for plugin in plugins:
-                go.get(plugin)
+                print(go.get(plugin))
                 fd.write('\t_ "%s"\n' % (plugin.split("@")[0]))
             fd.write(")")
+        git.add("go.mod")
+        git.add("go.sum")
+        git.add(os.path.join(cmd, "xplugeth_imports.go"))
+        git.commit("-m", "xplugeth-build: add plugin imports")
 
         apply_patches(getPatches(cmd))
 
