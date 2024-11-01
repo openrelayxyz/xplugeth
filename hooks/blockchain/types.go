@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/openrelayxyz/xplugeth"
-	
+
 	"github.com/ethereum/go-ethereum/common"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -26,9 +26,14 @@ type SetTrieFlushIntervalClonePlugin interface {
 	SetTrieFlushIntervalClone(flushInterval time.Duration) time.Duration
 }
 
+type PeerEvalPlugin interface {
+	PeerEval(peerId string, headers []*gtypes.Header, hashes []common.Hash)
+}
+
 func init() {
 	xplugeth.RegisterHook[NewHeadPlugin]()
 	xplugeth.RegisterHook[NewSideBlockPlugin]()
 	xplugeth.RegisterHook[ReorgPlugin]()
 	xplugeth.RegisterHook[SetTrieFlushIntervalClonePlugin]()
+	xplugeth.RegisterHook[PeerEvalPlugin]()
 }
