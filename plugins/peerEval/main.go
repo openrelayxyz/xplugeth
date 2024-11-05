@@ -42,6 +42,11 @@ func (p *peerEvalPlugin) Blockchain() {
 		log.Error("failed to get peers", "err", err)
 		return
 	}
+	for _, peer := range peers {
+		for id, enode := range peer {
+			log.Info("Peer found", "id", id, "enode", enode)
+		}
+	}
 }
 
 func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
@@ -92,7 +97,6 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []
 			log.Error("failed to write data to file", "err", err)
 			return
 		}
-		os.Exit(0)
 	}
 
 }
@@ -100,4 +104,5 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []
 var (
 	_ initialize.Initializer    = (*peerEvalPlugin)(nil)
 	_ blockchain.PeerEvalPlugin = (*peerEvalPlugin)(nil)
+	_ initialize.Blockchain     = (*peerEvalPlugin)(nil)
 )
