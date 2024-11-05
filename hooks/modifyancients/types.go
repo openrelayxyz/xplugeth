@@ -11,5 +11,16 @@ type ModifyAncientsPlugin interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[ModifyAncientsPlugin]()
+	xplugeth.RegisterHook[ModifyAncientsPlugin](xplugeth.Patchset{
+		Remote: "github.com/openrelayxyz/xplugeth-patches",
+		Ref: "hooks_rawdb_foundation_v1.14.11_0",
+		Tests: []xplugeth.Test{
+			{
+				Package: "./core/rawdb",
+				TestNames: []string{
+					"TestRawDBInjections",
+				},
+			},
+		},
+	},)
 }
