@@ -27,20 +27,7 @@ type SetTrieFlushIntervalClonePlugin interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[NewHeadPlugin](
-		xplugeth.Patchset{
-			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_blockchain_foundation_v1.14.11_2",
-			Tests: []xplugeth.Test{
-				{
-					Package: "./core",
-					TestNames: []string{
-						"TestCoreInjections",
-					},
-				},
-			},
-		},
-	)
+	xplugeth.RegisterHook[NewHeadPlugin]()
 	xplugeth.RegisterHook[NewSideBlockPlugin]()
 	xplugeth.RegisterHook[ReorgPlugin]()
 	xplugeth.RegisterHook[SetTrieFlushIntervalClonePlugin]()
