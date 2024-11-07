@@ -11,7 +11,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
@@ -36,18 +38,18 @@ func (p *peerEvalPlugin) InitializeNode(s *node.Node, b types.Backend) {
 	client = stack.Attach()
 }
 
-func (p *peerEvalPlugin) Blockchain() {
-	peers, err := p.getPeers()
-	if err != nil {
-		log.Error("failed to get peers", "err", err)
-		return
-	}
-	for _, peer := range peers {
-		for id, enode := range peer {
-			log.Info("Peer found", "id", id, "enode", enode)
-		}
-	}
-}
+// func (p *peerEvalPlugin) Blockchain() {
+// 	peers, err := p.getPeers()
+// 	if err != nil {
+// 		log.Error("failed to get peers", "err", err)
+// 		return
+// 	}
+// 	for _, peer := range peers {
+// 		for id, enode := range peer {
+// 			log.Info("Peer found", "id", id, "enode", enode)
+// 		}
+// 	}
+// }
 
 func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
 	var peers []map[string]interface{}
@@ -74,12 +76,12 @@ func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
 
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []common.Hash) {
 	timeNow := time.Now().Format("15:04:05")
-
+	
 	blockNumbers := make([]uint64, 0)
 	for _, header := range headers {
 		blockNumbers = append(blockNumbers, header.Number.Uint64())
 	}
-
+	
 	evalData := map[string]interface{}{
 		timeNow: map[string]interface{}{
 			"id":     id,
@@ -87,8 +89,10 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []
 		},
 	}
 	peerData = append(peerData, evalData)
-
+	
 	count++
+	
+	log.Error("peer eval called", "time", timeNow, "count", count)
 
 	if count >= 20 {
 		jsonData, _ := json.MarshalIndent(peerData, "", "  ")
@@ -98,11 +102,27 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []
 			return
 		}
 	}
+}
 
+type peerEvalAPI struct {}
+
+func (*peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
+	log.Info("Registering peer eval APIs")
+	return []rpc.API{
+		{
+			Namespace: "plugeth",
+			Service:   &peerEvalAPI{},
+		},
+	}
+}
+
+func (*peerEvalAPI) getCount() int {
+	return count
 }
 
 var (
 	_ initialize.Initializer    = (*peerEvalPlugin)(nil)
 	_ blockchain.PeerEvalPlugin = (*peerEvalPlugin)(nil)
-	_ initialize.Blockchain     = (*peerEvalPlugin)(nil)
+	// _ initialize.Blockchain     = (*peerEvalPlugin)(nil)
+	_ apis.GetAPIs				= (*peerEvalPlugin)(nil)
 )
