@@ -11,19 +11,19 @@ import (
 )
 
 type NewHeadPlugin interface {
-	NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int)
+	NewHead(*gtypes.Block, common.Hash, []*gtypes.Log, *big.Int)
 }
 
 type NewSideBlockPlugin interface {
-	NewSideBlock(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log)
+	NewSideBlock(*gtypes.Block, common.Hash, []*gtypes.Log)
 }
 
 type ReorgPlugin interface {
-	Reorg(commonBlock common.Hash, oldChain, newChain []common.Hash)
+	Reorg(common.Hash, []common.Hash, []common.Hash)
 }
 
 type SetTrieFlushIntervalClonePlugin interface {
-	SetTrieFlushIntervalClone(flushInterval time.Duration) time.Duration
+	SetTrieFlushIntervalClone(time.Duration) time.Duration
 }
 
 func init() {
