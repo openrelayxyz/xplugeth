@@ -21,12 +21,15 @@ type pluginLoader struct {
 	hooks map[reflect.Type][]any
 	moduleValues []reflect.Value
 	names map[string]reflect.Type
-
+	patchsets map[reflect.Type][]Patchset
 	singletons map[reflect.Type]any
 }
 
-func (pl *pluginLoader) registerHook(t reflect.Type) {
+func (pl *pluginLoader) registerHook(t reflect.Type, p ...Patchset) {
 	pl.hookInterfaces = append(pl.hookInterfaces, t)
+	if len(p) > 0 {
+		pl.patchsets[t] = p
+	}
 }
 
 func (pl *pluginLoader) registerModule(t reflect.Type, name string) {
@@ -92,6 +95,7 @@ func init() {
 		hookInterfaces: []reflect.Type{},
 		hooks: make(map[reflect.Type][]any),
 		singletons: make(map[reflect.Type]any),
+		patchsets: make(map[reflect.Type][]Patchset),
 	}
 }
 
@@ -99,8 +103,8 @@ func RegisterModule[t any](name string) {
 	pl.registerModule(reflect.TypeFor[t](), name)
 }
 
-func RegisterHook[t any]() {
-	pl.registerHook(reflect.TypeFor[t]())
+func RegisterHook[t any](p ...Patchset) {
+	pl.registerHook(reflect.TypeFor[t](), p...)
 }
 
 func Initialize(dirpath string) {
@@ -176,4 +180,12 @@ func GetConfig[T any](name string) (*T, bool) {
 	}
 
 	return c, true
+}
+
+func GetPatchsets() [][]Patchset {
+	res := make([][]Patchset, 0, len(pl.patchsets))
+	for _, patchsets := range pl.patchsets {
+		res = append(res, patchsets)
+	}
+	return res
 }
