@@ -11,5 +11,18 @@ type StateUpdatePlugin interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[StateUpdatePlugin]()
+	xplugeth.RegisterHook[StateUpdatePlugin](
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_foundation_stateupdates_v1.14.11_0",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./core/state",
+					TestNames: []string{
+						"TestStateInjections",
+					},
+				},
+			},
+		},
+	)
 }
