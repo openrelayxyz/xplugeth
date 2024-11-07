@@ -116,7 +116,7 @@ func (*peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
 	}
 }
 
-func (*peerEvalAPI) getCount() int {
+func (*peerEvalAPI) GetCount() int {
 	return count
 }
 
