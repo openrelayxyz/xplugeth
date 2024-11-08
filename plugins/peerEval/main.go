@@ -1,10 +1,7 @@
 package peereval
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"time"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
@@ -38,19 +35,6 @@ func (p *peerEvalPlugin) InitializeNode(s *node.Node, b types.Backend) {
 	client = stack.Attach()
 }
 
-// func (p *peerEvalPlugin) Blockchain() {
-// 	peers, err := p.getPeers()
-// 	if err != nil {
-// 		log.Error("failed to get peers", "err", err)
-// 		return
-// 	}
-// 	for _, peer := range peers {
-// 		for id, enode := range peer {
-// 			log.Info("Peer found", "id", id, "enode", enode)
-// 		}
-// 	}
-// }
-
 func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
 	var peers []map[string]interface{}
 	err := client.Call(&peers, "admin_peers")
@@ -74,34 +58,8 @@ func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
 
 }
 
-func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []common.Hash) {
-	timeNow := time.Now().Format("15:04:05")
-	
-	blockNumbers := make([]uint64, 0)
-	for _, header := range headers {
-		blockNumbers = append(blockNumbers, header.Number.Uint64())
-	}
-	
-	evalData := map[string]interface{}{
-		timeNow: map[string]interface{}{
-			"id":     id,
-			"blocks": blockNumbers,
-		},
-	}
-	peerData = append(peerData, evalData)
-	
-	count++
-	
-	log.Error("peer eval called", "time", timeNow, "count", count)
-
-	if count >= 20 {
-		jsonData, _ := json.MarshalIndent(peerData, "", "  ")
-		filename := fmt.Sprintf("peer_eval_%s.json", time.Now().Format("20060102_150405"))
-		if err := os.WriteFile(filename, jsonData, 0644); err != nil {
-			log.Error("failed to write data to file", "err", err)
-			return
-		}
-	}
+func (*peerEvalPlugin) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
+	log.Error("these are the fields in question", "id", block.ReceivedFrom, "time", block.ReceivedAt)
 }
 
 type peerEvalAPI struct {}
@@ -122,7 +80,8 @@ func (*peerEvalAPI) GetCount() int {
 
 var (
 	_ initialize.Initializer    = (*peerEvalPlugin)(nil)
-	_ blockchain.PeerEvalPlugin = (*peerEvalPlugin)(nil)
+	_ blockchain.NewHeadPlugin = (*peerEvalPlugin)(nil)
+	// _ blockchain.PeerEvalPlugin = (*peerEvalPlugin)(nil)
 	// _ initialize.Blockchain     = (*peerEvalPlugin)(nil)
 	_ apis.GetAPIs				= (*peerEvalPlugin)(nil)
 )
