@@ -25,7 +25,6 @@ type ReorgPlugin interface {
 type SetTrieFlushIntervalClonePlugin interface {
 	SetTrieFlushIntervalClone(time.Duration) time.Duration
 }
-hooks_bor_blockchain_v1.5.2_0
 func init() {
 	xplugeth.RegisterHook[NewHeadPlugin](
 		xplugeth.Patchset{
