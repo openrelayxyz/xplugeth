@@ -15,19 +15,6 @@ type PostTrieCommit interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[PreTrieCommit](
-		xplugeth.Patchset{
-			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_foundation_triecommit_v1.14.11_0",
-			Tests: []xplugeth.Test{
-				{
-					Package: "./core",
-					TestNames: []string{
-						"TestHashDBInjections",
-					},
-				},
-			},
-		},
-	)
+	xplugeth.RegisterHook[PreTrieCommit]()
 	xplugeth.RegisterHook[PostTrieCommit]()
 }
