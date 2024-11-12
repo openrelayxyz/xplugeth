@@ -90,6 +90,8 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
         git.add("go.mod")
         git.add("go.sum")
         git.add(os.path.join(cmd, "xplugeth_imports.go"))
+        git.config("user.name", "xplugeth-build")
+        git.config("user.email", "build@plugeth.org")
         git.commit("-m", "xplugeth-build: add plugin imports")
 
         apply_patches(getPatches(cmd))
