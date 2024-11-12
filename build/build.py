@@ -54,6 +54,8 @@ def apply_patchset(patchset):
             continue
         else:
             break
+    else:
+        raise Exception("No successful pathces applied for patchset")
 
 def apply_patch(patch):
     remote_name = "".join(random.choice(string.ascii_lowercase) for _ in range(6))
