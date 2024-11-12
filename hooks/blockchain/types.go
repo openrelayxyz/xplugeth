@@ -25,9 +25,22 @@ type ReorgPlugin interface {
 type SetTrieFlushIntervalClonePlugin interface {
 	SetTrieFlushIntervalClone(time.Duration) time.Duration
 }
-
+hooks_bor_blockchain_v1.5.2_0
 func init() {
-	xplugeth.RegisterHook[NewHeadPlugin]()
+	xplugeth.RegisterHook[NewHeadPlugin](
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_bor_blockchain_v1.5.2_0",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./core",
+					TestNames: []string{
+						"TestCoreInjections",
+					},
+				},
+			},
+		},
+	)
 	xplugeth.RegisterHook[NewSideBlockPlugin]()
 	xplugeth.RegisterHook[ReorgPlugin]()
 	xplugeth.RegisterHook[SetTrieFlushIntervalClonePlugin]()
