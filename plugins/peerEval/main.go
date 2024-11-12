@@ -15,6 +15,8 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 )
 
 var (
@@ -34,6 +36,30 @@ func init() {
 func (p *peerEvalPlugin) InitializeNode(s *node.Node, b types.Backend) {
 	stack = *s
 	client = stack.Attach()
+
+	go func() {
+		for {
+			cpuPercent, err := cpu.Percent(0, false)
+			if err != nil {
+				log.Error("Failed to get CPU stats", "err", err)
+				continue
+			}
+			v, err := mem.VirtualMemory()
+			if err != nil {
+				log.Error("Failed to get memory stats", "err", err)
+				continue
+			}
+
+			log.Info("System Stats",
+				"cpu_usage", fmt.Sprintf("%.2f%%", cpuPercent[0]),
+				"used memory", fmt.Sprintf("%.2f MB", float64(v.Used)/1024/1024),
+				"total memory", fmt.Sprintf("%.2f MB", float64(v.Total)/1024/1024),
+				"free memory", fmt.Sprintf("%.2f MB", float64(v.Free)/1024/1024),
+				"memory usage", fmt.Sprintf("%.2f%%", v.UsedPercent),
+			)
+			time.Sleep(15 * time.Second)
+		}
+	}()
 }
 
 func (p *peerEvalPlugin) Blockchain() {
