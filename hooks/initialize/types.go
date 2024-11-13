@@ -19,20 +19,7 @@ type Initializer interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[Initializer](
-		xplugeth.Patchset{
-			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_foundation_init_v1.14.11_0",
-			Tests: []xplugeth.Test{
-				{
-					Package: "./cmd/geth",
-					TestNames: []string{
-						"TestGethPkgInjections",
-					},
-				},
-			},
-		},
-	)
+	xplugeth.RegisterHook[Initializer]()
 	xplugeth.RegisterHook[Shutdown]()
 	xplugeth.RegisterHook[Blockchain]()
 }
