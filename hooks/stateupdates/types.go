@@ -14,7 +14,7 @@ func init() {
 	xplugeth.RegisterHook[StateUpdatePlugin](
 		xplugeth.Patchset{
 			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_etc_stateupdates_v1.14.11_0",
+			Ref: "hooks_etc_stateupdates_v1.12.20_1",
 			Tests: []xplugeth.Test{
 				{
 					Package: "./core/state",
