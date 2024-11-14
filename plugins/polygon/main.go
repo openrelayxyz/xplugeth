@@ -9,6 +9,7 @@ import (
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
 
 	ctypes "github.com/openrelayxyz/cardinal-types"
 	"github.com/openrelayxyz/cardinal-types/hexutil"
@@ -41,9 +42,11 @@ func (p *polygonPlugin) InitializeNode(s *node.Node, b types.Backend) {
 	p.backend = b
 	p.client = s.Attach()
 
-	var hex hexutil.Uint64
-	p.client.Call(&hex, "eth_chainID")
-	p.chainid = int64(hex)
+	var ok bool
+	p.chainid, ok = utils.GetChainID() 
+	if !ok {
+		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, polygon"))
+	}
 
 	if present := xplugeth.HasModule("cardinalProducerModule"); !present {
 		panic("cardinal plugin not detected from polygon plugin")
