@@ -11,26 +11,26 @@ import (
 )
 
 type NewHeadPlugin interface {
-	NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int)
+	NewHead(*gtypes.Block, common.Hash, []*gtypes.Log, *big.Int)
 }
 
 type NewSideBlockPlugin interface {
-	NewSideBlock(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log)
+	NewSideBlock(*gtypes.Block, common.Hash, []*gtypes.Log)
 }
 
 type ReorgPlugin interface {
-	Reorg(commonBlock common.Hash, oldChain, newChain []common.Hash)
+	Reorg(common.Hash, []common.Hash, []common.Hash)
 }
 
 type SetTrieFlushIntervalClonePlugin interface {
-	SetTrieFlushIntervalClone(flushInterval time.Duration) time.Duration
+	SetTrieFlushIntervalClone(time.Duration) time.Duration
 }
 
 func init() {
 	xplugeth.RegisterHook[NewHeadPlugin](
 		xplugeth.Patchset{
 			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_blockchain_foundation_v1.14.11_2",
+			Ref: "hooks_foundation_blockchain_v1.14.11_0",
 			Tests: []xplugeth.Test{
 				{
 					Package: "./core",

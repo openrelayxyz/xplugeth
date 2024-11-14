@@ -7,18 +7,18 @@ import (
 )
 
 type PreTrieCommit interface {
-	PreTrieCommit(node common.Hash)
+	PreTrieCommit(common.Hash)
 }
 
 type PostTrieCommit interface {
-	PostTrieCommit(node common.Hash)
+	PostTrieCommit(common.Hash)
 }
 
 func init() {
 	xplugeth.RegisterHook[PreTrieCommit](
 		xplugeth.Patchset{
 			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_triecommit_foundation_v1.14.11_2",
+			Ref: "hooks_foundation_triecommit_v1.14.11_0",
 			Tests: []xplugeth.Test{
 				{
 					Package: "./core",
