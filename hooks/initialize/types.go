@@ -34,6 +34,18 @@ func init() {
 		},
 		xplugeth.Patchset{
 			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_etc_init_v1.12.20_2",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./cmd/geth",
+					TestNames: []string{
+						"TestGethPkgInjections",
+					},
+				},
+			},
+		},
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
 			Ref: "hooks_bor_init_v1.5.2_4",
 			Tests: []xplugeth.Test{
 				{
