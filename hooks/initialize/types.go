@@ -32,6 +32,18 @@ func init() {
 				},
 			},
 		},
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_bor_init_v1.5.2_4",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./internal/cli/server",
+					TestNames: []string{
+						"TestServerPkgInjections",
+					},
+				},
+			},
+		},
 	)
 	xplugeth.RegisterHook[Shutdown]()
 	xplugeth.RegisterHook[Blockchain]()
