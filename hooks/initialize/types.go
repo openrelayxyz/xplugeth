@@ -22,7 +22,7 @@ func init() {
 	xplugeth.RegisterHook[Initializer](
 		xplugeth.Patchset{
 			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_etc_init_v1.12.20_0",
+			Ref: "hooks_etc_init_v1.12.20_1",
 			Tests: []xplugeth.Test{
 				{
 					Package: "./cmd/geth",
