@@ -25,6 +25,11 @@ type ReorgPlugin interface {
 type SetTrieFlushIntervalClonePlugin interface {
 	SetTrieFlushIntervalClone(time.Duration) time.Duration
 }
+
+type PeerEvalPlugin interface {
+	PeerEval(peerId string, headers []*gtypes.Header)
+}
+
 func init() {
 	xplugeth.RegisterHook[NewHeadPlugin](
 		xplugeth.Patchset{
