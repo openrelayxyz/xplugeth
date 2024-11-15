@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -98,14 +97,13 @@ func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
 
 }
 
-func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []common.Hash) {
+func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 	timeNow := time.Now().Format("15:04:05")
 
 	blockNumbers := make([]uint64, 0)
 	for _, header := range headers {
 		blockNumbers = append(blockNumbers, header.Number.Uint64())
 	}
-
 	evalData := map[string]interface{}{
 		timeNow: map[string]interface{}{
 			"id":     id,
@@ -115,7 +113,6 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header, hashes []
 	peerData = append(peerData, evalData)
 
 	count++
-
 	if count >= 20 {
 		jsonData, _ := json.MarshalIndent(peerData, "", "  ")
 		filename := fmt.Sprintf("peer_eval_%s.json", time.Now().Format("20060102_150405"))

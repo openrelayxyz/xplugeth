@@ -27,7 +27,7 @@ type SetTrieFlushIntervalClonePlugin interface {
 }
 
 type PeerEvalPlugin interface {
-	PeerEval(peerId string, headers []*gtypes.Header, hashes []common.Hash)
+	PeerEval(peerId string, headers []*gtypes.Header)
 }
 
 func init() {
