@@ -3,11 +3,15 @@ package example
 import (
 	"context"
 	"time"
-	"github.com/openrelayxyz/xplugeth"
-	"github.com/openrelayxyz/xplugeth/types"
+	
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+
+	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
+	"github.com/openrelayxyz/xplugeth/hooks/initialize"
+	"github.com/openrelayxyz/xplugeth/types"
 )
 
 
@@ -25,7 +29,7 @@ type ExampleConfig struct {
 var cfg *ExampleConfig
 
 
-func (*exampleModule) InitializeNode(s *node.Node, b types.Backend) {
+func (*exampleModule) InitializeNode(*node.Node, types.Backend) {
 	log.Info("Example module initialized")
 	
 	var ok bool
@@ -48,18 +52,18 @@ func (*exampleModule) GetAPIs(*node.Node, types.Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "plugeth",
-			Service:   &exampleService{},
+			Service:   &exampleAPIService{},
 		},
 	}
 }
 
-type exampleService struct{}
+type exampleAPIService struct{}
 
-func (es *exampleService) Hello() string {
+func (es *exampleAPIService) Hello() string {
 	return "Hello world!"
 }
 
-func (es *exampleService) Ticker(ctx context.Context) (<-chan int, error) {
+func (es *exampleAPIService) Ticker(ctx context.Context) (<-chan int, error) {
 	ch := make(chan int)
 	go func() {
 		ticker := time.NewTicker(time.Second)
@@ -76,3 +80,9 @@ func (es *exampleService) Ticker(ctx context.Context) (<-chan int, error) {
 	}()
 	return ch, nil
 }
+
+var (
+	_ apis.GetAPIs = (*exampleModule)(nil)
+	_ initialize.Initializer = (*exampleModule)(nil)
+	_ initialize.Shutdown = (*exampleModule)(nil)
+)
