@@ -54,6 +54,8 @@ def apply_patchset(patchset):
             continue
         else:
             break
+    else:
+        raise Exception("No successful pathces applied for patchset")
 
 def apply_patch(patch):
     remote_name = "".join(random.choice(string.ascii_lowercase) for _ in range(6))
@@ -90,6 +92,8 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
         git.add("go.mod")
         git.add("go.sum")
         git.add(os.path.join(cmd, "xplugeth_imports.go"))
+        git.config("user.name", "xplugeth-build")
+        git.config("user.email", "build@plugeth.org")
         git.commit("-m", "xplugeth-build: add plugin imports")
 
         apply_patches(getPatches(cmd))
