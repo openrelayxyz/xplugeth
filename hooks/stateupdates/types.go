@@ -7,10 +7,22 @@ import (
 )
 
 type StateUpdatePlugin interface {
-	StateUpdate(blockRoot, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte)
+	StateUpdate(common.Hash, common.Hash, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte)
 }
 
 func init() {
-	xplugeth.RegisterHook[StateUpdatePlugin]()
-
+	xplugeth.RegisterHook[StateUpdatePlugin](
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_bor_stateupdates_v1.5.2_0",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./core/state",
+					TestNames: []string{
+						"TestStateInjections",
+					},
+				},
+			},
+		},
+	)
 }

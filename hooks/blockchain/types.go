@@ -5,33 +5,41 @@ import (
 	"time"
 
 	"github.com/openrelayxyz/xplugeth"
-
+	
 	"github.com/ethereum/go-ethereum/common"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 type NewHeadPlugin interface {
-	NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int)
+	NewHead(*gtypes.Block, common.Hash, []*gtypes.Log, *big.Int)
 }
 
 type NewSideBlockPlugin interface {
-	NewSideBlock(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log)
+	NewSideBlock(*gtypes.Block, common.Hash, []*gtypes.Log)
 }
 
 type ReorgPlugin interface {
-	Reorg(commonBlock common.Hash, oldChain, newChain []common.Hash)
+	Reorg(common.Hash, []common.Hash, []common.Hash)
 }
 
 type SetTrieFlushIntervalClonePlugin interface {
-	SetTrieFlushIntervalClone(flushInterval time.Duration) time.Duration
+	SetTrieFlushIntervalClone(time.Duration) time.Duration
 }
-
-type PeerEvalPlugin interface {
-	PeerEval(peerId string, headers []*gtypes.Header)
-}
-
 func init() {
-	xplugeth.RegisterHook[NewHeadPlugin]()
+	xplugeth.RegisterHook[NewHeadPlugin](
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_bor_blockchain_v1.5.2_2",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./core",
+					TestNames: []string{
+						"TestCoreInjections",
+					},
+				},
+			},
+		},
+	)
 	xplugeth.RegisterHook[NewSideBlockPlugin]()
 	xplugeth.RegisterHook[ReorgPlugin]()
 	xplugeth.RegisterHook[SetTrieFlushIntervalClonePlugin]()
