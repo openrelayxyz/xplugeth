@@ -44,6 +44,30 @@ func init() {
 				},
 			},
 		},
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_etc_blockchain_v1.12.20_0",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./core",
+					TestNames: []string{
+						"TestCoreInjections",
+					},
+				},
+			},
+		},
+		xplugeth.Patchset{
+			Remote: "github.com/openrelayxyz/xplugeth-patches",
+			Ref: "hooks_bor_blockchain_v1.5.2_2",
+			Tests: []xplugeth.Test{
+				{
+					Package: "./core",
+					TestNames: []string{
+						"TestCoreInjections",
+					},
+				},
+			},
+		},
 	)
 	xplugeth.RegisterHook[NewSideBlockPlugin]()
 	xplugeth.RegisterHook[ReorgPlugin]()
