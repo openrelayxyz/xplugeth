@@ -98,6 +98,7 @@ func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
 }
 
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
+	log.Error("inside of peer eval")
 	timeNow := time.Now().Format("15:04:05")
 
 	blockNumbers := make([]uint64, 0)
@@ -113,7 +114,8 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 	peerData = append(peerData, evalData)
 
 	count++
-	if count >= 20 {
+	log.Error("hit", "no", count)
+	if count >= 10 {
 		jsonData, _ := json.MarshalIndent(peerData, "", "  ")
 		filename := fmt.Sprintf("peer_eval_%s.json", time.Now().Format("20060102_150405"))
 		if err := os.WriteFile(filename, jsonData, 0644); err != nil {
