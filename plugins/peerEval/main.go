@@ -29,7 +29,7 @@ type peerEvalPlugin struct {
 }
 
 func init() {
-	xplugeth.RegisterModule[peerEvalPlugin]("peerEvalModule")
+	xplugeth.RegisterModule[peerEvalPlugin]("peerEvalPlugin")
 }
 
 func (p *peerEvalPlugin) InitializeNode(s *node.Node, b types.Backend) {
