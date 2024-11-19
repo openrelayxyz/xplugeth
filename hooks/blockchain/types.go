@@ -30,7 +30,7 @@ func init() {
 	xplugeth.RegisterHook[NewHeadPlugin](
 		xplugeth.Patchset{
 			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_foundation_blockchain_v1.14.11_0",
+			Ref: "hooks_foundation_blockchain_v1.14.12_0",
 			Tests: []xplugeth.Test{
 				{
 					Package: "./core",
