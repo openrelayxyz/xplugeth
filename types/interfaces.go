@@ -2,7 +2,6 @@ package types
 
 import (
 	"context"
-	// "math/big"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/state"
