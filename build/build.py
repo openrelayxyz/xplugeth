@@ -33,7 +33,7 @@ def getPatches(cmd):
     try:
         with open("get_patchset.go", "w") as fd:
             fd.write(patchset_go)
-        x = json.loads(go.run("get_patchset.go", "xplugeth_imports.go"))
+        x = json.loads(go.run("-tags=patchset", "get_patchset.go", "xplugeth_imports.go"))
         os.remove("get_patchset.go")
         return x
     finally:
