@@ -1,5 +1,7 @@
 package producer
 
+//go:build !patchset
+
 import (
 	"fmt"
 	"bytes"
