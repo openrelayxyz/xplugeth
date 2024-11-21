@@ -1,4 +1,6 @@
+//go:build !patchset
 package producer
+
 
 import (
 	"fmt"
