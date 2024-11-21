@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -21,24 +22,29 @@ import (
 	"github.com/openrelayxyz/xplugeth/types"
 )
 
+var (
+	events event.Feed
+	block string
+)
+
 func init() {
 	log.Error("inside xplugeth side live tracer")
 	tracers.LiveDirectory.Register("xTracer", newXplugethTracer)
-	xplugeth.RegisterModule[noop]("liveBlockTracer")
+	xplugeth.RegisterModule[tracerResult]("liveBlockTracer")
 }
 
 // noop is a no-op live tracer. It's there to
 // catch changes in the tracing interface, as well as
 // for testing live tracing performance. Can be removed
-// as soon as we have a real live tracer.
-type noop struct{
+// as soon as we have a real live tracet.
+type tracerResult struct{
 	CallStack []CallStack
 	Results   []CallStack
 }
 
 func newXplugethTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	log.Error("inside of xplugeth tracer")
-	t := &noop{}
+	t := &tracerResult{}
 	return &tracing.Hooks{
 		OnTxStart:        t.OnTxStart,
 		OnTxEnd:          t.OnTxEnd,
@@ -60,78 +66,90 @@ func newXplugethTracer(_ json.RawMessage) (*tracing.Hooks, error) {
 	}, nil
 }
 
-func (t *noop) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *tracerResult) OnOpcode(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
 }
 
-func (t *noop) OnFault(pc uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
+func (t *tracerResult) OnFault(pc uint64, op byte, gas, cost uint64, _ tracing.OpContext, depth int, err error) {
 }
 
-func (t *noop) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
-	r.CallStack = append(r.CallStack, CallStack{
-		Type:  restricted.OpCode(typ).String(),
+func (t *tracerResult) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+	t.CallStack = append(t.CallStack, CallStack{
+		Block: block, 
+		Type:  vm.OpCode(typ).String(),
 		From:  from,
 		To:    to,
 		Input: hexutil.Bytes(input),
 		Gas:   hexutil.Uint64(gas),
 		Calls: []CallStack{},
 	})
+	// log.Error("ENTER", "opcode", vm.OpCode(typ).String())
 }
 
-func (t *noop) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
-	if len(r.CallStack) > 1 {
-		returnCall := r.CallStack[len(r.CallStack)-1]
+func (t *tracerResult) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+	if len(t.CallStack) > 1 {
+		returnCall := t.CallStack[len(t.CallStack)-1]
 		returnCall.GasUsed = hexutil.Uint64(gasUsed)
 		returnCall.Output = output
-		r.CallStack[len(r.CallStack)-2].Calls = append(r.CallStack[len(r.CallStack)-2].Calls, returnCall)
-		r.CallStack = r.CallStack[:len(r.CallStack)-1]
+		t.CallStack[len(t.CallStack)-2].Calls = append(t.CallStack[len(t.CallStack)-2].Calls, returnCall)
+		t.CallStack = t.CallStack[:len(t.CallStack)-1]
+	}
+	// log.Error("EXIT", "exit_len", len(t.CallStack))
+}
+
+func (t *tracerResult) OnTxStart(vm *tracing.VMContext, tx *gtypes.Transaction, from common.Address) {
+	// log.Error("inside of on tx start")
+	t.CallStack = []CallStack{}
+}
+
+func (t *tracerResult) OnTxEnd(receipt *gtypes.Receipt, err error) {
+	// log.Error("inside of on block end", "len", len(t.Results))
+	if len(t.CallStack) > 0 {
+		t.Results = append(t.CallStack)
 	}
 }
 
-func (t *noop) OnTxStart(vm *tracing.VMContext, tx *gtypes.Transaction, from common.Address) {
-	r.CallStack = []CallStack{}
+func (t *tracerResult) OnBlockStart(ev tracing.BlockEvent) {
+	// log.Error("inside of on block start", "block", ev.Block.Number().String())
+	block = ev.Block.Number().String()
+	t.Results = []CallStack{}
 }
 
-func (t *noop) OnTxEnd(receipt *gtypes.Receipt, err error) {
-}
-
-func (t *noop) OnBlockStart(ev tracing.BlockEvent) {
-	r.Results = []CallStack{}
-}
-
-func (t *noop) OnBlockEnd(err error) {
-	if len(r.Results) > 0 {
-		events.Send(r.Results)
+func (t *tracerResult) OnBlockEnd(err error) {
+	// log.Error("inside of on block end", "len", len(t.Results))
+	if len(t.Results) > 0 {
+		events.Send(t.Results)
 	}
 }
 
-func (t *noop) OnSkippedBlock(ev tracing.BlockEvent) {}
+func (t *tracerResult) OnSkippedBlock(ev tracing.BlockEvent) {}
 
-func (t *noop) OnBlockchainInit(chainConfig *params.ChainConfig) {
+func (t *tracerResult) OnBlockchainInit(chainConfig *params.ChainConfig) {
 }
 
-func (t *noop) OnGenesisBlock(b *gtypes.Block, alloc gtypes.GenesisAlloc) {
+func (t *tracerResult) OnGenesisBlock(b *gtypes.Block, alloc gtypes.GenesisAlloc) {
 }
 
-func (t *noop) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
+func (t *tracerResult) OnBalanceChange(a common.Address, prev, new *big.Int, reason tracing.BalanceChangeReason) {
 }
 
-func (t *noop) OnNonceChange(a common.Address, prev, new uint64) {
+func (t *tracerResult) OnNonceChange(a common.Address, prev, new uint64) {
 }
 
-func (t *noop) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
+func (t *tracerResult) OnCodeChange(a common.Address, prevCodeHash common.Hash, prev []byte, codeHash common.Hash, code []byte) {
 }
 
-func (t *noop) OnStorageChange(a common.Address, k, prev, new common.Hash) {
+func (t *tracerResult) OnStorageChange(a common.Address, k, prev, new common.Hash) {
 }
 
-func (t *noop) OnLog(l *gtypes.Log) {
+func (t *tracerResult) OnLog(l *gtypes.Log) {
 
 }
 
-func (t *noop) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
+func (t *tracerResult) OnGasChange(old, new uint64, reason tracing.GasChangeReason) {
 }
 
 type CallStack struct {
+	Block   string         `json."block"`
 	Type    string         `json:"type"`
 	From    common.Address   `json:"from"`
 	To      common.Address   `json:"to"`
@@ -146,10 +164,9 @@ type CallStack struct {
 	Error   string         `json:"error,omitempty"`
 }
 
-func (t *noop) TraceBlock(ctx context.Context) (<-chan []CallStack, error) {
+func (t *tracerResult) TraceBlock(ctx context.Context) (<-chan []CallStack, error) {
 	subch := make(chan []CallStack, 1000)
 	rtrnch := make(chan []CallStack, 1000)
-	events := event.Feed{}
 	go func() {
 		log.Info("Subscription Block Tracer setup")
 		sub := events.Subscribe(subch)
@@ -173,16 +190,16 @@ func (t *noop) TraceBlock(ctx context.Context) (<-chan []CallStack, error) {
 	return rtrnch, nil
 }
 
-func (*noop) GetAPIs(*node.Node, types.Backend) []rpc.API {
+func (*tracerResult) GetAPIs(*node.Node, types.Backend) []rpc.API {
 	log.Info("Registering live block tracer APIs")
 	return []rpc.API{
 		{
 			Namespace: "plugeth",
-			Service:   &noop{},
+			Service:   &tracerResult{},
 		},
 	}
 }
 
 var (
-	_ apis.GetAPIs = (*noop)(nil)
+	_ apis.GetAPIs = (*tracerResult)(nil)
 )
