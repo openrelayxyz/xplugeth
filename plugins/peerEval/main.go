@@ -14,15 +14,14 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
 )
 
 var (
-	stack    node.Node
-	client   *rpc.Client
-	peerData []map[string]interface{}
-	count    int
+	stack       node.Node
+	client      *rpc.Client
+	peerData    []map[string]interface{}
+	activePeers map[string]time.Time{}
+	count       int
 )
 
 type peerEvalPlugin struct {
@@ -35,30 +34,6 @@ func init() {
 func (p *peerEvalPlugin) InitializeNode(s *node.Node, b types.Backend) {
 	stack = *s
 	client = stack.Attach()
-
-	go func() {
-		for {
-			cpuPercent, err := cpu.Percent(0, false)
-			if err != nil {
-				log.Error("Failed to get CPU stats", "err", err)
-				continue
-			}
-			v, err := mem.VirtualMemory()
-			if err != nil {
-				log.Error("Failed to get memory stats", "err", err)
-				continue
-			}
-
-			log.Info("System Stats",
-				"cpu_usage", fmt.Sprintf("%.2f%%", cpuPercent[0]),
-				"used memory", fmt.Sprintf("%.2f MB", float64(v.Used)/1024/1024),
-				"total memory", fmt.Sprintf("%.2f MB", float64(v.Total)/1024/1024),
-				"free memory", fmt.Sprintf("%.2f MB", float64(v.Free)/1024/1024),
-				"memory usage", fmt.Sprintf("%.2f%%", v.UsedPercent),
-			)
-			time.Sleep(15 * time.Second)
-		}
-	}()
 }
 
 func (p *peerEvalPlugin) Blockchain() {
@@ -69,7 +44,7 @@ func (p *peerEvalPlugin) Blockchain() {
 	}
 	for _, peer := range peers {
 		for id, enode := range peer {
-			log.Info("Peer found", "id", id, "enode", enode)
+			log.Error("Peer found", "id", id, "enode", enode)
 		}
 	}
 }
@@ -98,7 +73,7 @@ func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
 }
 
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
-	log.Error("inside of peer eval")
+	activePeers[id] = time.Now().Format("20060102_150405")
 	timeNow := time.Now().Format("15:04:05")
 
 	blockNumbers := make([]uint64, 0)
@@ -112,12 +87,14 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 		},
 	}
 	peerData = append(peerData, evalData)
-
 	count++
 	log.Error("hit", "no", count)
+	var peerCount int
 	if count >= 10 {
+		peerCount = len(peerData)
 		jsonData, _ := json.MarshalIndent(peerData, "", "  ")
 		filename := fmt.Sprintf("peer_eval_%s.json", time.Now().Format("20060102_150405"))
+		count = 0
 		if err := os.WriteFile(filename, jsonData, 0644); err != nil {
 			log.Error("failed to write data to file", "err", err)
 			return
