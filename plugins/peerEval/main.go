@@ -1,16 +1,16 @@
 package peereval
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+	
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
@@ -19,9 +19,9 @@ import (
 var (
 	stack       node.Node
 	client      *rpc.Client
-	peerData    []map[string]interface{}
-	activePeers map[string]time.Time{}
-	count       int
+	gatheringCount 		int
+	innerPeerData    []map[string]interface{}
+	outerPeerData    map[string]interface{}
 )
 
 type peerEvalPlugin struct {
@@ -31,80 +31,104 @@ func init() {
 	xplugeth.RegisterModule[peerEvalPlugin]("peerEvalPlugin")
 }
 
-func (p *peerEvalPlugin) InitializeNode(s *node.Node, b types.Backend) {
-	stack = *s
-	client = stack.Attach()
+func (p *peerEvalPlugin) InitializeNode(s *node.Node, _ types.Backend) {
+	client = s.Attach()
 }
 
-func (p *peerEvalPlugin) Blockchain() {
-	peers, err := p.getPeers()
-	if err != nil {
-		log.Error("failed to get peers", "err", err)
-		return
-	}
-	for _, peer := range peers {
-		for id, enode := range peer {
-			log.Error("Peer found", "id", id, "enode", enode)
-		}
-	}
-}
-
-func (p *peerEvalPlugin) getPeers() ([]map[string]string, error) {
-	var peers []map[string]interface{}
-	err := client.Call(&peers, "admin_peers")
+func getPeers() ([]string, error) {
+	var rawPeerData []map[string]interface{}
+	err := client.Call(&rawPeerData, "admin_peers")
 	if err != nil {
 		log.Error("error calling admin_peers, peerEval plugin", "err", err)
 		return nil, err
 	}
 
-	peerMapList := make([]map[string]string, 0)
-	for _, peer := range peers {
-		if id, ok := peer["id"].(string); ok {
-			if enode, ok := peer["enode"].(string); ok {
-				peerMap := map[string]string{
-					id: enode,
-				}
-				peerMapList = append(peerMapList, peerMap)
+	peers := []string{}
+
+	for _, item := range rawPeerData {
+		for k, v := range item {
+			if k == "id" {
+				peers = append(peers, v.(string))
 			}
 		}
 	}
-	return peerMapList, nil
+
+	return peers, nil
 
 }
 
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
-	activePeers[id] = time.Now().Format("20060102_150405")
-	timeNow := time.Now().Format("15:04:05")
+	gatheringCount ++
+	log.Error(fmt.Sprintf("Gathering peer data, count %v/100", gatheringCount))
 
-	blockNumbers := make([]uint64, 0)
+	t := time.Now().Format("20060102_150405")
+
+	blockNumbers := []string{}
 	for _, header := range headers {
-		blockNumbers = append(blockNumbers, header.Number.Uint64())
+		blockNumbers = append(blockNumbers, header.Number.String())
 	}
+
 	evalData := map[string]interface{}{
-		timeNow: map[string]interface{}{
 			"id":     id,
+			"time":   t,
 			"blocks": blockNumbers,
-		},
 	}
-	peerData = append(peerData, evalData)
-	count++
-	log.Error("hit", "no", count)
-	var peerCount int
-	if count >= 10 {
-		peerCount = len(peerData)
-		jsonData, _ := json.MarshalIndent(peerData, "", "  ")
-		filename := fmt.Sprintf("peer_eval_%s.json", time.Now().Format("20060102_150405"))
-		count = 0
-		if err := os.WriteFile(filename, jsonData, 0644); err != nil {
-			log.Error("failed to write data to file", "err", err)
-			return
-		}
+
+	innerPeerData = append(innerPeerData, evalData)
+
+	if gatheringCount >= 100 {
+		gatheringCount = 0
 	}
 
 }
 
+type peerEvalAPI struct {}
+
+func (p *peerEvalAPI) GetPeerData() (map[string]interface{}, error) {
+	resultChan := make(chan map[string]interface{}, 1)
+	errChan := make(chan error, 1)
+	defer close(resultChan)
+	defer close(errChan)
+	go func() {
+		for {
+			if gatheringCount >= 100 {
+				peerSlice, err := getPeers()
+				if err != nil {
+					log.Error("error obtaining peer slice", "err", err)
+					errChan <- err
+
+				} 
+				data := make(map[string]interface{})
+				data["peers"] = peerSlice
+				data["active"] = innerPeerData
+				
+				resultChan <- data
+			}
+		}
+	}()
+
+	// var err error
+	// var result map[string]interface{}
+	select {
+	case err := <-errChan:
+		return nil, err
+	case result := <-resultChan:
+		return result, nil
+	}
+}
+
+func (p *peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
+	log.Info("Registering peer eval plugin APIs")
+	return []rpc.API{
+		{
+			Namespace: "plugeth",
+			Service:   &peerEvalAPI{},
+		},
+	}
+}
+
 var (
+	_ apis.GetAPIs    = (*peerEvalPlugin)(nil)
 	_ initialize.Initializer    = (*peerEvalPlugin)(nil)
 	_ blockchain.PeerEvalPlugin = (*peerEvalPlugin)(nil)
-	_ initialize.Blockchain     = (*peerEvalPlugin)(nil)
 )
