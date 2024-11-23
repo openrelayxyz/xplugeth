@@ -3,6 +3,8 @@ package peereval
 import (
 	"fmt"
 	"time"
+	"encoding/json"
+	"os"
 
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -22,6 +24,7 @@ var (
 	gatheringCount 		int
 	innerPeerData    []map[string]interface{}
 	outerPeerData    map[string]interface{}
+	triggerChan      chan struct{}
 )
 
 type peerEvalPlugin struct {
@@ -80,41 +83,54 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 		gatheringCount = 0
 	}
 
+	select {
+	case <-triggerChan:
+		returnPeerData()
+	}
+
 }
 
-type peerEvalAPI struct {}
-
-func (p *peerEvalAPI) GetPeerData() (map[string]interface{}, error) {
-	resultChan := make(chan map[string]interface{}, 1)
-	errChan := make(chan error, 1)
-	defer close(resultChan)
-	defer close(errChan)
+func returnPeerData() {
+	log.Error("gathering peer data")
 	go func() {
 		for {
 			if gatheringCount >= 100 {
 				peerSlice, err := getPeers()
 				if err != nil {
 					log.Error("error obtaining peer slice", "err", err)
-					errChan <- err
 
 				} 
 				data := make(map[string]interface{})
 				data["peers"] = peerSlice
 				data["active"] = innerPeerData
-				
-				resultChan <- data
+
+				jsonData, err := json.Marshal(data)
+				if err != nil {
+					log.Error("error marshaling JSON", "err", err)
+				}
+
+				file, err := os.Create(fmt.Sprintf("peer-data-%v.json", time.Now().Format("20060102_150405")))
+				if err != nil {
+					log.Error("error creating file", "err", err)
+				}
+				defer file.Close()
+
+				_, err = file.Write(jsonData)
+				if err != nil {
+					log.Error("error writing to file", "err", err)
+				}
 			}
 		}
 	}()
+}
 
-	// var err error
-	// var result map[string]interface{}
-	select {
-	case err := <-errChan:
-		return nil, err
-	case result := <-resultChan:
-		return result, nil
-	}
+type peerEvalAPI struct {}
+
+func (p *peerEvalAPI) GetPeerData() string {
+	triggerChan = make(chan struct{}, 1)
+	triggerChan <- struct{}{}
+	defer close(triggerChan)
+	return "signal sent"
 }
 
 func (p *peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
