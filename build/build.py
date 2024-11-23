@@ -33,7 +33,7 @@ def getPatches(cmd):
     try:
         with open("get_patchset.go", "w") as fd:
             fd.write(patchset_go)
-        x = json.loads(go.run("get_patchset.go", "xplugeth_imports.go"))
+        x = json.loads(go.run("-tags=patchset xplugeth", "get_patchset.go", "xplugeth_imports.go"))
         os.remove("get_patchset.go")
         return x
     finally:
@@ -54,6 +54,8 @@ def apply_patchset(patchset):
             continue
         else:
             break
+    else:
+        raise Exception("No successful pathces applied for patchset")
 
 def apply_patch(patch):
     remote_name = "".join(random.choice(string.ascii_lowercase) for _ in range(6))
@@ -82,7 +84,7 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
         git.clean("-fdx")
         git.checkout(tag)
         with open(os.path.join(cmd, "xplugeth_imports.go"), "w") as fd:
-            fd.write("package main\nimport (\n")
+            fd.write("//go:build xplugeth\npackage main\nimport (\n")
             for plugin in plugins:
                 print(go.get(plugin))
                 fd.write('\t_ "%s"\n' % (plugin.split("@")[0]))
@@ -90,11 +92,13 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
         git.add("go.mod")
         git.add("go.sum")
         git.add(os.path.join(cmd, "xplugeth_imports.go"))
+        git.config("user.name", "xplugeth-build")
+        git.config("user.email", "build@plugeth.org")
         git.commit("-m", "xplugeth-build: add plugin imports")
 
         apply_patches(getPatches(cmd))
 
-        print(go.build("-o", os.path.join(artifacts_directory, os.path.split(cmd)[-1]), cmd))
+        print(go.build("-tags=xplugeth", "-o", os.path.join(artifacts_directory, os.path.split(cmd)[-1]), cmd))
     finally:
         os.chdir(orig)
 
