@@ -92,36 +92,36 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 
 func returnPeerData() {
 	log.Error("gathering peer data")
-	go func() {
-		for {
-			if gatheringCount >= 100 {
-				peerSlice, err := getPeers()
-				if err != nil {
-					log.Error("error obtaining peer slice", "err", err)
+	outerloop:
+	for {
+		if gatheringCount >= 100 {
+			peerSlice, err := getPeers()
+			if err != nil {
+				log.Error("error obtaining peer slice", "err", err)
 
-				} 
-				data := make(map[string]interface{})
-				data["peers"] = peerSlice
-				data["active"] = innerPeerData
+			} 
+			data := make(map[string]interface{})
+			data["peers"] = peerSlice
+			data["active"] = innerPeerData
 
-				jsonData, err := json.Marshal(data)
-				if err != nil {
-					log.Error("error marshaling JSON", "err", err)
-				}
-
-				file, err := os.Create(fmt.Sprintf("peer-data-%v.json", time.Now().Format("20060102_150405")))
-				if err != nil {
-					log.Error("error creating file", "err", err)
-				}
-				defer file.Close()
-
-				_, err = file.Write(jsonData)
-				if err != nil {
-					log.Error("error writing to file", "err", err)
-				}
+			jsonData, err := json.Marshal(data)
+			if err != nil {
+				log.Error("error marshaling JSON", "err", err)
 			}
+
+			file, err := os.Create(fmt.Sprintf("peer-data-%v.json", time.Now().Format("20060102_150405")))
+			if err != nil {
+				log.Error("error creating file", "err", err)
+			}
+			defer file.Close()
+
+			_, err = file.Write(jsonData)
+			if err != nil {
+				log.Error("error writing to file", "err", err)
+			}
+			break outerloop
 		}
-	}()
+	}
 }
 
 type peerEvalAPI struct {}
