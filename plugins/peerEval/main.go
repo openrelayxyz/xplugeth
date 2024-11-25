@@ -19,12 +19,11 @@ import (
 )
 
 var (
-	stack       node.Node
-	client      *rpc.Client
-	gatheringCount 		int
-	innerPeerData    []map[string]interface{}
-	outerPeerData    map[string]interface{}
-	triggerChan      chan struct{}
+	stack            node.Node
+	client           *rpc.Client
+	gatheringCount 	 int
+	called           bool
+	activePeerData    []map[string]interface{}
 )
 
 type peerEvalPlugin struct {
@@ -77,60 +76,51 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 			"blocks": blockNumbers,
 	}
 
-	innerPeerData = append(innerPeerData, evalData)
+	activePeerData = append(activePeerData, evalData)
 
 	if gatheringCount >= 100 {
+		if called {
+			returnPeerData()
+			called = false
+		}
 		gatheringCount = 0
+		activePeerData  = make([]map[string]interface{}, 100)
 	}
-
-	select {
-	case <-triggerChan:
-		returnPeerData()
-	}
-
 }
 
 func returnPeerData() {
-	log.Error("gathering peer data")
-	outerloop:
-	for {
-		if gatheringCount >= 100 {
-			peerSlice, err := getPeers()
-			if err != nil {
-				log.Error("error obtaining peer slice", "err", err)
+	log.Error("gathering peer data for return")
+	peerSlice, err := getPeers()
+	if err != nil {
+		log.Error("error obtaining peer slice", "err", err)
 
-			} 
-			data := make(map[string]interface{})
-			data["peers"] = peerSlice
-			data["active"] = innerPeerData
+	} 
+	data := make(map[string]interface{})
+	data["peers"] = peerSlice
+	data["active"] = activePeerData
 
-			jsonData, err := json.Marshal(data)
-			if err != nil {
-				log.Error("error marshaling JSON", "err", err)
-			}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Error("error marshaling JSON", "err", err)
+	}
 
-			file, err := os.Create(fmt.Sprintf("peer-data-%v.json", time.Now().Format("20060102_150405")))
-			if err != nil {
-				log.Error("error creating file", "err", err)
-			}
-			defer file.Close()
+	file, err := os.Create(fmt.Sprintf("peer-data-%v.json", time.Now().Format("20060102_150405")))
+	if err != nil {
+		log.Error("error creating file", "err", err)
+	}
+	defer file.Close()
 
-			_, err = file.Write(jsonData)
-			if err != nil {
-				log.Error("error writing to file", "err", err)
-			}
-			break outerloop
-		}
+	_, err = file.Write(jsonData)
+	if err != nil {
+		log.Error("error writing to file return PeerData", "err", err)
 	}
 }
 
 type peerEvalAPI struct {}
 
 func (p *peerEvalAPI) GetPeerData() string {
-	triggerChan = make(chan struct{}, 1)
-	triggerChan <- struct{}{}
-	defer close(triggerChan)
-	return "signal sent"
+	called = true
+	return "signal set"
 }
 
 func (p *peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
