@@ -79,11 +79,11 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 	activePeerData = append(activePeerData, evalData)
 
 	if gatheringCount >= 100 {
-		if called {
-			returnPeerData()
-			called = false
-		}
 		gatheringCount = 0
+		if called {
+			called = false
+			returnPeerData()
+		}
 		activePeerData  = []map[string]interface{}{}
 	}
 }
