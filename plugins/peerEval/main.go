@@ -84,7 +84,7 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 			called = false
 		}
 		gatheringCount = 0
-		activePeerData  = make([]map[string]interface{}, 100)
+		activePeerData  = []map[string]interface{}{}
 	}
 }
 
