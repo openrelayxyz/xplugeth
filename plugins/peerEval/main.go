@@ -81,9 +81,10 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 		gatheringCount = 0
 		if called {
 			called = false
+			log.Error(fmt.Sprintf("Length before returnPeerData: %v", len(activePeerData)))
 			returnPeerData()
 		}
-		clear(activePeerData)
+		activePeerData = activePeerData[:0]
 		log.Error(fmt.Sprintf("Length of activePeerData: %v", len(activePeerData)))
 	}
 }
