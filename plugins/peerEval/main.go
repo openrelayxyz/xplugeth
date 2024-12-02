@@ -1,16 +1,16 @@
 package peereval
 
 import (
-	"fmt"
-	"time"
 	"encoding/json"
+	"fmt"
 	"os"
+	"time"
 
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-	
+
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
@@ -19,11 +19,11 @@ import (
 )
 
 var (
-	stack            node.Node
-	client           *rpc.Client
-	gatheringCount 	 int
-	called           bool
-	activePeerData    []map[string]interface{}
+	stack          node.Node
+	client         *rpc.Client
+	gatheringCount int
+	called         bool
+	activePeerData []map[string]interface{}
 )
 
 type peerEvalPlugin struct {
@@ -56,11 +56,10 @@ func getPeers() ([]string, error) {
 	}
 
 	return peers, nil
-
 }
 
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
-	gatheringCount ++
+	gatheringCount++
 	log.Error(fmt.Sprintf("Gathering peer data, count %v/100", gatheringCount))
 
 	t := time.Now().Format("20060102_150405")
@@ -71,9 +70,9 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 	}
 
 	evalData := map[string]interface{}{
-			"id":     id,
-			"time":   t,
-			"blocks": blockNumbers,
+		"id":     id,
+		"time":   t,
+		"blocks": blockNumbers,
 	}
 
 	activePeerData = append(activePeerData, evalData)
@@ -84,7 +83,8 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 			called = false
 			returnPeerData()
 		}
-		activePeerData  = []map[string]interface{}{}
+		clear(activePeerData)
+		log.Error(fmt.Sprintf("Length of activePeerData: %v", len(activePeerData)))
 	}
 }
 
@@ -94,7 +94,7 @@ func returnPeerData() {
 	if err != nil {
 		log.Error("error obtaining peer slice", "err", err)
 
-	} 
+	}
 	data := make(map[string]interface{})
 	data["peers"] = peerSlice
 	data["active"] = activePeerData
@@ -116,7 +116,7 @@ func returnPeerData() {
 	}
 }
 
-type peerEvalAPI struct {}
+type peerEvalAPI struct{}
 
 func (p *peerEvalAPI) GetPeerData() string {
 	called = true
@@ -134,7 +134,7 @@ func (p *peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
 }
 
 var (
-	_ apis.GetAPIs    = (*peerEvalPlugin)(nil)
+	_ apis.GetAPIs              = (*peerEvalPlugin)(nil)
 	_ initialize.Initializer    = (*peerEvalPlugin)(nil)
 	_ blockchain.PeerEvalPlugin = (*peerEvalPlugin)(nil)
 )
