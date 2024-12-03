@@ -17,8 +17,9 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/hooks/modifyancients"
 	"github.com/openrelayxyz/xplugeth/hooks/stateupdates"
-
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
+
 	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -274,7 +275,11 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 				log.Error("Could not decode block during reorg", "hash", hash, "err", err)
 				return
 			}
-		td := sessionBackend.GetTd(context.Background(), parentBlock.Hash())
+		td, err := utils.GetTd(parentBlock.Hash())
+		if err != nil {
+			log.Error("error acquiring total difficulty, newHead, blockupdates", "hash", hash, "err", err)
+			return
+		}
 		newHead(*parentBlock, block.Hash(), td)
 	}
 	blockEvents.Send(result)
@@ -300,7 +305,11 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 			log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
 			return
 		}
-		td := bu.backend.GetTd(context.Background(), blockHash)
+		td, err := utils.GetTd(blockHash)
+		if err != nil {
+			log.Error("error acquiring total difficulty, Reorg, blockupdates", "hash", blockHash, "err", err)
+			return
+		}
 		newHead(*block, blockHash, td)
 	}
 
@@ -319,7 +328,11 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 	}
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
-	td := sessionBackend.GetTd(context.Background(), block.Hash())
+	td, err := utils.GetTd(block.Hash())
+	if err != nil {
+		log.Error("error acquiring total difficulty, BlockupdatesByNumber", "hash", block.Hash(), "err", err)
+		return nil, nil, nil, nil, nil, nil, nil, err
+	}
 
 	receipts, err := sessionBackend.GetReceipts(context.Background(), block.Hash())
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
