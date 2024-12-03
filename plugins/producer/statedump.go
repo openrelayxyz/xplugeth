@@ -15,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/openrelayxyz/xplugeth/utils"
 )
 
 var (
@@ -93,7 +95,11 @@ var (
 				if err != nil { return err }
 			}
 			blockno := uint64(header.Number.Int64())
-			td := backend.GetTd(context.Background(), header.Hash())
+			td, err := utils.GetTd(header.Hash())
+			if err != nil {
+				log.Error("error acquiring total difficulty, statedump, producer", "hash", header.Hash(), "err", err)
+				return err
+			}
 
 			acctIter := db.NewIterator(snapshotAccountPrefix, nil)
 			defer acctIter.Release()
