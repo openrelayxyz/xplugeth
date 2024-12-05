@@ -82,6 +82,7 @@ func getPeers() ([]string, error) {
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 	gatheringCount++
 	blockCount += len(headers)
+	log.Error(fmt.Sprintf("recieving peers, count %v/100", gatheringCount))
 
 	currentInterval = blockCount / intervalDuration
 
@@ -104,8 +105,6 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 		p.evaluatePeers()
 		p.resetMetrics()
 	}
-
-	log.Error(fmt.Sprintf("Gathering peer data, count %v/100", gatheringCount))
 
 	// t := time.Now().Format("20060102_150405")
 
