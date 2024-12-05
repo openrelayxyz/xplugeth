@@ -24,7 +24,7 @@ type pluginLoader struct {
 	names map[string]reflect.Type
 	patchsets map[reflect.Type][]Patchset
 	singletons map[reflect.Type]any
-	subCommands map[string]func()error
+	subCommands map[string]func([]string)error
 }
 
 func (pl *pluginLoader) registerHook(t reflect.Type, p ...Patchset) {
@@ -43,7 +43,7 @@ func (pl *pluginLoader) registerModule(t reflect.Type, name string) {
 	pl.names[name] = t
 }
 
-func (pl *pluginLoader) registerSubCommands(provided map[string]func()error) {
+func (pl *pluginLoader) registerSubCommands(provided map[string]func([]string)error) {
 	for name, f := range provided {
 		pl.subCommands[name] = f
 	}
@@ -113,7 +113,7 @@ func (pl *pluginLoader) runSubcommand(args []string) (bool, error) {
 	} 
 	command, ok := pl.subCommands[args[0]]
 	if ok {
-		return true, command()
+		return true, command(args[1:])
 	}
 	return false, fmt.Errorf("subcommand not %v not recognized", args[0])
 } 
@@ -127,7 +127,7 @@ func init() {
 		hooks: make(map[reflect.Type][]any),
 		singletons: make(map[reflect.Type]any),
 		patchsets: make(map[reflect.Type][]Patchset),
-		subCommands: make(map[string]func()error),
+		subCommands: make(map[string]func([]string)error),
 	}
 }
 
@@ -135,7 +135,7 @@ func RegisterModule[t any](name string) {
 	pl.registerModule(reflect.TypeFor[t](), name)
 }
 
-func RegisterSubCommands(funcs map[string]func()error) {
+func RegisterSubCommands(funcs map[string]func([]string)error) {
 	pl.registerSubCommands(funcs)
 }
 

@@ -85,16 +85,16 @@ func (es *exampleAPIService) Ticker(ctx context.Context) (<-chan int, error) {
 }
 
 var (
-	subCommands map[string]func()error = map[string]func()error {
-		"exampleSubComOne": func() error {
-				log.Error("you ran the FIRST subcommand")
+	subCommands map[string]func([]string)error = map[string]func([]string)error {
+		"exampleSubComOne": func([]string) error {
+				log.Info("you ran the FIRST subcommand")
 				return nil
 		},
-		"exampleSubComTwo": func() error {
-				log.Error("you ran the SECOND subcommand")
+		"exampleSubComTwo": func([]string) error {
+				log.Info("you ran the SECOND subcommand")
 				return nil
 		},
-		"exampleSubComThree": func() error {
+		"exampleSubComThree": func([]string) error {
 			return errors.New("the third subcommand returns this error")
 		},
 	}

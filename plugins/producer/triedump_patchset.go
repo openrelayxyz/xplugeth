@@ -10,6 +10,6 @@ func stateTrieUpdatesByNumber(i int64) (map[common.Hash]struct{}, map[common.Has
 	return nil, nil, nil, nil, nil
 }
 
-func trieDump (ctx cli.Context, args []string) error {
+func trieDump (args []string) error {
 	return nil
 }
