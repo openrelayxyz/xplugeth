@@ -2,8 +2,9 @@ package example
 
 import (
 	"context"
+	"errors"
 	"time"
-	
+
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -15,9 +16,11 @@ import (
 )
 
 
-type exampleModule struct {}
+type exampleModule struct {
+}
 
 func init() {
+	xplugeth.RegisterSubCommands(subCommands)
 	xplugeth.RegisterModule[exampleModule]("example")
 }
 
@@ -80,6 +83,22 @@ func (es *exampleAPIService) Ticker(ctx context.Context) (<-chan int, error) {
 	}()
 	return ch, nil
 }
+
+var (
+	subCommands map[string]func()error = map[string]func()error {
+		"exampleSubComOne": func() error {
+				log.Error("you ran the FIRST subcommand")
+				return nil
+		},
+		"exampleSubComTwo": func() error {
+				log.Error("you ran the SECOND subcommand")
+				return nil
+		},
+		"exampleSubComThree": func() error {
+			return errors.New("the third subcommand returns this error")
+		},
+	}
+)
 
 var (
 	_ apis.GetAPIs = (*exampleModule)(nil)

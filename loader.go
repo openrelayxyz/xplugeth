@@ -1,6 +1,7 @@
 package xplugeth
 
 import (
+	"fmt"
 	"path"
 	"path/filepath"
 	"strings"
@@ -23,6 +24,7 @@ type pluginLoader struct {
 	names map[string]reflect.Type
 	patchsets map[reflect.Type][]Patchset
 	singletons map[reflect.Type]any
+	subCommands map[string]func()error
 }
 
 func (pl *pluginLoader) registerHook(t reflect.Type, p ...Patchset) {
@@ -39,6 +41,12 @@ func (pl *pluginLoader) registerModule(t reflect.Type, name string) {
 		pl.names = n
 	}
 	pl.names[name] = t
+}
+
+func (pl *pluginLoader) registerSubCommands(provided map[string]func()error) {
+	for name, f := range provided {
+		pl.subCommands[name] = f
+	}
 }
 
 func (pl *pluginLoader) initialize(dirpath string) {
@@ -87,6 +95,29 @@ func (pl *pluginLoader) hasModule(name string) bool {
 	return ok
 }
 
+func (pl *pluginLoader) hasSubcommand(commands []string) bool {
+	if commands == nil || len(commands) == 0 {
+		return false
+	}
+	for _, name := range commands {
+		if _, ok := pl.subCommands[name]; !ok {
+			return false
+		}	 
+	}
+	return true
+}
+
+func (pl *pluginLoader) runSubcommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	} 
+	command, ok := pl.subCommands[args[0]]
+	if ok {
+		return true, command()
+	}
+	return false, fmt.Errorf("subcommand not %v not recognized", args[0])
+} 
+
 var pl *pluginLoader
 
 func init() {
@@ -96,11 +127,16 @@ func init() {
 		hooks: make(map[reflect.Type][]any),
 		singletons: make(map[reflect.Type]any),
 		patchsets: make(map[reflect.Type][]Patchset),
+		subCommands: make(map[string]func()error),
 	}
 }
 
 func RegisterModule[t any](name string) {
 	pl.registerModule(reflect.TypeFor[t](), name)
+}
+
+func RegisterSubCommands(funcs map[string]func()error) {
+	pl.registerSubCommands(funcs)
 }
 
 func RegisterHook[t any](p ...Patchset) {
@@ -139,6 +175,14 @@ func GetSingleton[t any]() (t, bool) {
 
 func HasModule(name string) bool {
 	return pl.hasModule(name)
+}
+
+func HasSubcommand(commands []string) bool {
+	return pl.hasSubcommand(commands)
+}
+
+func RunSubcommand(commands []string) (bool, error) {
+	return pl.runSubcommand(commands)
 }
 
 func GetConfig[T any](name string) (*T, bool) {
