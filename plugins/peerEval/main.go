@@ -54,6 +54,7 @@ func init() {
 
 func (p *peerEvalPlugin) InitializeNode(s *node.Node, _ types.Backend) {
 	client = s.Attach()
+	p.peerMetricsMap = make(map[string]*PeerMetrics)
 	p.StartPeerMonitoring()
 }
 
