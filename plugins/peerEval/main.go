@@ -82,7 +82,7 @@ func getPeers() ([]string, error) {
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 	gatheringCount++
 	blockCount += len(headers)
-	log.Error(fmt.Sprintf("recieving peers, count %v/100", gatheringCount))
+	log.Error(fmt.Sprintf("blockcount %v", blockCount))
 
 	currentInterval = blockCount / intervalDuration
 
@@ -105,6 +105,8 @@ func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
 		p.evaluatePeers()
 		p.resetMetrics()
 	}
+
+	// log.Error(fmt.Sprintf("Gathering peer data, count %v/100", gatheringCount))
 
 	// t := time.Now().Format("20060102_150405")
 
@@ -167,7 +169,6 @@ func (p *peerEvalPlugin) updatePeerConnections() {
 	}
 	for id, peerMetric := range p.peerMetricsMap {
 		if !currentPeers[id] && peerMetric.IsConnected {
-
 			peerMetric.IsConnected = false
 			peerMetric.LastDisconnected = time.Now()
 			peerMetric.ConnectedTime += peerMetric.LastDisconnected.Sub(peerMetric.LastConnected)
@@ -187,14 +188,15 @@ func (p *peerEvalPlugin) evaluatePeers() {
 			peerMetric.LastConnected = time.Now()
 		}
 
-		uptimePercentage := (peerMetric.ConnectedTime.Seconds() / (float64(monitoringPeriod) * averageBlockTime)) * 100
+		totalElapsedTime := time.Since(peerMetric.LastConnected) + peerMetric.ConnectedTime
+		uptimePercentage := (peerMetric.ConnectedTime.Seconds() / totalElapsedTime.Seconds()) * 100
 
-		log.Info("Peer Metrics",
-			"ID", peerMetric.ID,
-			"BlocksContributed", peerMetric.BlocksContributed,
-			"ConsistencyScore", consistencyScore,
-			"UptimePercentage", uptimePercentage,
-		)
+		log.Error(fmt.Sprintf("Peer Metrics\nID: %s\nBlocksContributed: %d\nConsistencyScore: %d\nUptimePercentage: %.2f",
+			peerMetric.ID,
+			peerMetric.BlocksContributed,
+			consistencyScore,
+			uptimePercentage,
+		))
 	}
 }
 
@@ -202,9 +204,9 @@ func (p *peerEvalPlugin) resetMetrics() {
 	for _, peerMetric := range p.peerMetricsMap {
 		peerMetric.BlocksContributed = 0
 		peerMetric.ContributionIntervals = make(map[int]bool)
-		peerMetric.ConnectedTime = 0
-		peerMetric.LastConnected = time.Now()
-		peerMetric.IsConnected = true
+		// peerMetric.ConnectedTime = 0
+		// peerMetric.LastConnected = time.Now()
+		// peerMetric.IsConnected = true
 	}
 }
 
