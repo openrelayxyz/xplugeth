@@ -95,27 +95,30 @@ func (pl *pluginLoader) hasModule(name string) bool {
 	return ok
 }
 
-func (pl *pluginLoader) hasSubcommand(commands []string) bool {
+func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
 	if commands == nil || len(commands) == 0 {
-		return false
+		return 0, false
 	}
-	for _, name := range commands {
-		if _, ok := pl.subCommands[name]; !ok {
-			return false
+	for i, name := range commands {
+		if _, ok := pl.subCommands[name]; ok {
+			log.Error("returning from has sub", "len", len(commands), "commands", commands, "name", name, "i", i)
+			return i, true
 		}	 
 	}
-	return true
+	return 0, false
 }
 
 func (pl *pluginLoader) runSubcommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
 	} 
-	command, ok := pl.subCommands[args[0]]
-	if ok {
-		return true, command(args[1:])
+	for i, name := range args {
+		command, ok := pl.subCommands[name]
+		if ok {
+			return true, command(args[i+1:])
+		}
 	}
-	return false, fmt.Errorf("subcommand not %v not recognized", args[0])
+	return false, fmt.Errorf("subcommand not %v not recognized", args)
 } 
 
 var pl *pluginLoader
@@ -177,7 +180,7 @@ func HasModule(name string) bool {
 	return pl.hasModule(name)
 }
 
-func HasSubcommand(commands []string) bool {
+func HasSubcommand(commands []string) (int, bool) {
 	return pl.hasSubcommand(commands)
 }
 
