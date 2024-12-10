@@ -14,7 +14,7 @@ import (
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
-	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
+	"github.com/openrelayxyz/xplugeth/hooks/fetcher"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
 )
@@ -256,7 +256,7 @@ func (p *peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
 }
 
 var (
-	_ apis.GetAPIs              = (*peerEvalPlugin)(nil)
-	_ initialize.Initializer    = (*peerEvalPlugin)(nil)
-	_ blockchain.PeerEvalPlugin = (*peerEvalPlugin)(nil)
+	_ apis.GetAPIs           = (*peerEvalPlugin)(nil)
+	_ initialize.Initializer = (*peerEvalPlugin)(nil)
+	_ fetcher.PeerEvalPlugin = (*peerEvalPlugin)(nil)
 )
