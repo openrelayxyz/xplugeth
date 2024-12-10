@@ -3,6 +3,7 @@ package example
 import (
 	"context"
 	"errors"
+	"flag"	
 	"time"
 
 	"github.com/ethereum/go-ethereum/node"
@@ -16,10 +17,18 @@ import (
 )
 
 
+var (
+	flags = *flag.NewFlagSet("example-plugin", flag.ContinueOnError)
+	exampleBoolFlag = flags.Bool("example.bool.flag", false, "example bool flag for xplugeth")
+	exampleStringFlag = flags.String("example.string.flag", "", "example string flag for xplugeth")
+)
+
+
 type exampleModule struct {
 }
 
 func init() {
+	xplugeth.RegisterFlags(flags)
 	xplugeth.RegisterSubCommands(subCommands)
 	xplugeth.RegisterModule[exampleModule]("example")
 }
@@ -34,6 +43,10 @@ var cfg *ExampleConfig
 
 func (*exampleModule) InitializeNode(*node.Node, types.Backend) {
 	log.Info("Example module initialized")
+
+	if *exampleBoolFlag {
+		log.Error("flag set, example plugin")
+	}
 	
 	var ok bool
 	cfg, ok = xplugeth.GetConfig[ExampleConfig]("example")

@@ -2,6 +2,7 @@ package xplugeth
 
 import (
 	"fmt"
+	"flag"
 	"path"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,7 @@ type pluginLoader struct {
 	patchsets map[reflect.Type][]Patchset
 	singletons map[reflect.Type]any
 	subCommands map[string]func([]string)error
+	flags []flag.FlagSet
 }
 
 func (pl *pluginLoader) registerHook(t reflect.Type, p ...Patchset) {
@@ -47,6 +49,10 @@ func (pl *pluginLoader) registerSubCommands(provided map[string]func([]string)er
 	for name, f := range provided {
 		pl.subCommands[name] = f
 	}
+}
+
+func (pl *pluginLoader) registerFlags(provided flag.FlagSet) {
+	pl.flags = append(pl.flags, provided)
 }
 
 func (pl *pluginLoader) initialize(dirpath string) {
@@ -95,6 +101,18 @@ func (pl *pluginLoader) hasModule(name string) bool {
 	return ok
 }
 
+func (pl *pluginLoader) parseCommands(commands []string) (int,bool) {
+	var i int
+	var ok bool
+	if i, ok = pl.hasSubcommand(commands); ok {
+		return i, ok
+	}
+	if i, ok = pl.hasFlag(commands); ok {
+		return i, ok
+	}
+	return i, ok
+}
+
 func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
 	if commands == nil || len(commands) == 0 {
 		return 0, false
@@ -104,6 +122,36 @@ func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
 			log.Error("returning from has sub", "len", len(commands), "commands", commands, "name", name, "i", i)
 			return i, true
 		}	 
+	}
+	return 0, false
+}
+
+func (pl *pluginLoader) hasFlag(args []string) (int, bool) {
+	log.Error("times called")
+	if args == nil || len(args) == 0 {
+		return 0, false
+	}
+	for _, fs := range pl.flags {
+		err := fs.Parse(args)
+		if err != nil {
+			log.Error("error returned while attempting to parse flags, xplugeth", "error", err)
+			return 0, false
+		}
+		for i, arg := range args {
+			// var flagArgs []string
+			// if arg[0:2] == "--" {
+			// 	flagArgs = append(flagArgs, arg)
+			// }
+			// fs.Parse(flagArgs)
+			argName := strings.TrimPrefix(arg, "--")
+			if strings.Contains(argName, "=") {
+				argName = strings.Split(argName, "=")[0]
+			}
+			if p := fs.Lookup(argName); p != nil {
+				log.Error("above the loop", "args", args, "flags", pl.flags)
+				return i, true
+			} 
+		}
 	}
 	return 0, false
 }
@@ -131,6 +179,7 @@ func init() {
 		singletons: make(map[reflect.Type]any),
 		patchsets: make(map[reflect.Type][]Patchset),
 		subCommands: make(map[string]func([]string)error),
+		flags: make([]flag.FlagSet, 0),
 	}
 }
 
@@ -140,6 +189,10 @@ func RegisterModule[t any](name string) {
 
 func RegisterSubCommands(funcs map[string]func([]string)error) {
 	pl.registerSubCommands(funcs)
+}
+
+func RegisterFlags(flags flag.FlagSet) {
+	pl.registerFlags(flags)
 }
 
 func RegisterHook[t any](p ...Patchset) {
@@ -180,12 +233,20 @@ func HasModule(name string) bool {
 	return pl.hasModule(name)
 }
 
+func ParseCommands(commands []string) (int,bool) {
+	return pl.parseCommands(commands)
+}
+
 func HasSubcommand(commands []string) (int, bool) {
 	return pl.hasSubcommand(commands)
 }
 
 func RunSubcommand(commands []string) (bool, error) {
 	return pl.runSubcommand(commands)
+}
+
+func HasFlag(commands []string) (int, bool) {
+	return pl.hasFlag(commands)
 }
 
 func GetConfig[T any](name string) (*T, bool) {
