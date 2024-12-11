@@ -133,9 +133,16 @@ func (pl *pluginLoader) hasFlag(args []string) (int, bool) {
 		return 0, false
 	}
 
+	masterFlagSet := *flag.NewFlagSet("master-plugin-flagset", flag.ContinueOnError)
+	for _, flagset := range pl.flags {
+		flagset.VisitAll(func(f *flag.Flag) {
+			masterFlagSet.Var(f.Value, f.Name, f.Usage)
+		})
+	}
+
 	flagArgs := make([]string, len(args))
+	prefix := "--"
 	for i, arg := range args {
-		prefix := "--"
 		if strings.HasPrefix(arg, prefix) {
 			flagArgs[i] = arg
 		}
@@ -148,15 +155,14 @@ func (pl *pluginLoader) hasFlag(args []string) (int, bool) {
 		if eqIdx := strings.Index(argName, "="); eqIdx != -1 {
 			argName = argName[:eqIdx] 
 		}
-		for _, fs := range pl.flags {
-			if p := fs.Lookup(argName); p != nil {
-				idx = i
-				present = true
-				if err := fs.Parse(args[i:]); err != nil {
-					log.Error("error parsing flags, xplugeth flags should be positioned after all geth flags", "err", err)
-					return 0, false
-				}
+		if p := masterFlagSet.Lookup(argName); p != nil {
+			idx = i
+			present = true
+			if err := masterFlagSet.Parse(args[i:]); err != nil {
+				log.Error("error parsing flags, xplugeth flags should be positioned after all geth flags", "err", err)
+				return 0, false
 			}
+			return idx, present
 		}
 	}
 	return idx, present
