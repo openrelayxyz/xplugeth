@@ -1,7 +1,6 @@
 package xplugeth
 
 import (
-	"fmt"
 	"flag"
 	"path"
 	"path/filepath"
@@ -27,6 +26,8 @@ type pluginLoader struct {
 	singletons map[reflect.Type]any
 	subCommands map[string]func([]string)error
 	flags []flag.FlagSet
+	providedSubCommand string
+	providedSCArgs []string
 }
 
 func (pl *pluginLoader) registerHook(t reflect.Type, p ...Patchset) {
@@ -119,7 +120,8 @@ func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
 	}
 	for i, name := range commands {
 		if _, ok := pl.subCommands[name]; ok {
-			log.Error("returning from has sub", "len", len(commands), "commands", commands, "name", name, "i", i)
+			pl.providedSubCommand = name
+			pl.providedSCArgs = commands[i:]
 			return i, true
 		}	 
 	}
@@ -127,46 +129,45 @@ func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
 }
 
 func (pl *pluginLoader) hasFlag(args []string) (int, bool) {
-	log.Error("times called")
 	if args == nil || len(args) == 0 {
 		return 0, false
 	}
-	for _, fs := range pl.flags {
-		err := fs.Parse(args)
-		if err != nil {
-			log.Error("error returned while attempting to parse flags, xplugeth", "error", err)
-			return 0, false
-		}
-		for i, arg := range args {
-			// var flagArgs []string
-			// if arg[0:2] == "--" {
-			// 	flagArgs = append(flagArgs, arg)
-			// }
-			// fs.Parse(flagArgs)
-			argName := strings.TrimPrefix(arg, "--")
-			if strings.Contains(argName, "=") {
-				argName = strings.Split(argName, "=")[0]
-			}
-			if p := fs.Lookup(argName); p != nil {
-				log.Error("above the loop", "args", args, "flags", pl.flags)
-				return i, true
-			} 
+
+	flagArgs := make([]string, len(args))
+	for i, arg := range args {
+		prefix := "--"
+		if strings.HasPrefix(arg, prefix) {
+			flagArgs[i] = arg
 		}
 	}
-	return 0, false
+
+	var idx int 
+	var present bool
+	for i, arg := range flagArgs {
+		argName := strings.TrimPrefix(arg, "--")
+		if eqIdx := strings.Index(argName, "="); eqIdx != -1 {
+			argName = argName[:eqIdx] 
+		}
+		for _, fs := range pl.flags {
+			if p := fs.Lookup(argName); p != nil {
+				idx = i
+				present = true
+				if err := fs.Parse(args[i:]); err != nil {
+					log.Error("error parsing flags, xplugeth flags should be positioned after all geth flags", "err", err)
+					return 0, false
+				}
+			}
+		}
+	}
+	return idx, present
 }
 
-func (pl *pluginLoader) runSubcommand(args []string) (bool, error) {
-	if len(args) == 0 {
+func (pl *pluginLoader) runSubcommand() (bool, error) {
+	if pl.providedSubCommand == "" {
 		return false, nil
-	} 
-	for i, name := range args {
-		command, ok := pl.subCommands[name]
-		if ok {
-			return true, command(args[i+1:])
-		}
+	} else {
+		return true, pl.subCommands[pl.providedSubCommand](pl.providedSCArgs)
 	}
-	return false, fmt.Errorf("subcommand not %v not recognized", args)
 } 
 
 var pl *pluginLoader
@@ -241,8 +242,8 @@ func HasSubcommand(commands []string) (int, bool) {
 	return pl.hasSubcommand(commands)
 }
 
-func RunSubcommand(commands []string) (bool, error) {
-	return pl.runSubcommand(commands)
+func RunSubcommand() (bool, error) {
+	return pl.runSubcommand()
 }
 
 func HasFlag(commands []string) (int, bool) {

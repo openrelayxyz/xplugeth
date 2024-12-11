@@ -45,7 +45,10 @@ func (*exampleModule) InitializeNode(*node.Node, types.Backend) {
 	log.Info("Example module initialized")
 
 	if *exampleBoolFlag {
-		log.Error("flag set, example plugin")
+		log.Info("example bool flag set, example plugin")
+	}
+	if *exampleStringFlag != "" {
+		log.Info("example string flag set, example plugin", "value", *exampleStringFlag)
 	}
 	
 	var ok bool
