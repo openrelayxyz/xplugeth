@@ -20,8 +20,8 @@ var initializePatchsets = []xplugeth.Patchset {
 	},
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_etc_init_v1.12.20_2",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/30834739725747f7d8c54a2c3d7751ac8386d182
+		Ref: "hooks_etc_init_v1.12.20_3",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/7adbb2753c0c2a2bc31ddcbd541f4f4be35a597a
 		Tests: []xplugeth.Test{
 			{
 				Package: "./cmd/geth",
