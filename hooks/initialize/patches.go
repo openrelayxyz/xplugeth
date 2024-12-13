@@ -7,8 +7,8 @@ import (
 var initializePatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_init_v1.14.12_1",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/9b3a39dbf7a09855123307329b042a3d1821e74b
+		Ref: "hooks_foundation_init_v1.14.12_2",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/f0afe27cd27e85342d03f7fa96f6d1776c6422f4
 		Tests: []xplugeth.Test{
 			{
 				Package: "./cmd/geth",
