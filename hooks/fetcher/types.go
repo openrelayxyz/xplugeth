@@ -10,5 +10,5 @@ type PeerEvalPlugin interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[PeerEvalPlugin]()
+	xplugeth.RegisterHook[PeerEvalPlugin](fetcherPatchsets...)
 }
