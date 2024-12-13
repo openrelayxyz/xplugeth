@@ -245,6 +245,10 @@ func (p *peerEvalAPI) GetPeerData() string {
 	return "signal set"
 }
 
+func (p *peerEvalAPI) TestPeerEval() string {
+	return "calling from peer eval"
+}
+
 func (p *peerEvalPlugin) GetAPIs(*node.Node, types.Backend) []rpc.API {
 	log.Info("Registering peer eval plugin APIs")
 	return []rpc.API{
