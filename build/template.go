@@ -67,6 +67,9 @@ func (*buildTemplateModule) PreTrieCommit(common.Hash) {
 func (*buildTemplateModule) PostTrieCommit(common.Hash) {
 }
 
+func (*buildTemplateModule) PeerEval(string, []*gtypes.Header) {
+}
+
 
 
 var (
