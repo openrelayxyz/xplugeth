@@ -33,8 +33,8 @@ var initializePatchsets = []xplugeth.Patchset {
 	},
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_bor_init_v1.5.3_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/36cbeb7a405f28d628237c08772e3343522e9fa8
+		Ref: "hooks_bor_init_v1.5.3_1",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/dc9954e395009c5f0a0c96eb18c1222dad7275c5
 		Tests: []xplugeth.Test{
 			{
 				Package: "./internal/cli/server",
