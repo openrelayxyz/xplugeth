@@ -13,6 +13,7 @@ import (
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
+	"github.com/openrelayxyz/xplugeth/hooks/fetcher"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/hooks/modifyancients"
 	"github.com/openrelayxyz/xplugeth/hooks/stateupdates"
@@ -74,6 +75,7 @@ var (
 	_ blockchain.NewSideBlockPlugin = (*buildTemplateModule)(nil)
 	_ blockchain.ReorgPlugin = (*buildTemplateModule)(nil)
 	_ blockchain.SetTrieFlushIntervalClonePlugin = (*buildTemplateModule)(nil)
+	_ fetcher.PeerEvalPlugin = (*buildTemplateModule)(nil)
 	_ initialize.Initializer = (*buildTemplateModule)(nil)
 	_ initialize.Blockchain = (*buildTemplateModule)(nil)
 	_ initialize.Shutdown = (*buildTemplateModule)(nil)
