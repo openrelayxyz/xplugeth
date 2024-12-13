@@ -7,8 +7,8 @@ import (
 var fetcherPatchsets = []xplugeth.Patchset{
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref:    "hooks_etc_fetcher_v1.12.20_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/373fd0e865454cba8678831c9aac0f2849584261
+		Ref:    "hooks_etc_fetcher_v1.12.20_1",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/929e355704f59ef4b76871d4026692ac747b011a
 		Tests: []xplugeth.Test{
 			{
 				Package: "./eth/fetcher",
