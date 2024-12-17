@@ -53,6 +53,7 @@ type ExternalStreamSchema interface {
 }
 
 func init() {
+	xplugeth.RegisterSubCommands(subCommands)
 	xplugeth.RegisterModule[cardinalProducerModule]("cardinalProducerModule")
 
 	xplugeth.RegisterHook[ExternalAddBlock]()
