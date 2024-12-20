@@ -197,15 +197,11 @@ func RegisterModule[t any](name string) {
 }
 
 func RegisterSubCommands(funcs map[string]func([]string)error) {
-	if pl.initialized {
 		pl.registerSubCommands(funcs)
-	}
 }
 
 func RegisterFlags(flags flag.FlagSet) {
-	if pl.initialized {
 		pl.registerFlags(flags)
-	}
 }
 
 func RegisterHook[t any](p ...Patchset) {
@@ -251,7 +247,11 @@ func ParseCommands(commands []string) (int,bool) {
 }
 
 func HasSubcommand(commands []string) (int, bool) {
-	return pl.hasSubcommand(commands)
+	if pl.initialized {
+		return pl.hasSubcommand(commands)
+	} else {
+		return 0, false
+	}
 }
 
 func RunSubcommand() (bool, error) {
@@ -259,7 +259,11 @@ func RunSubcommand() (bool, error) {
 }
 
 func HasFlag(commands []string) (int, bool) {
-	return pl.hasFlag(commands)
+	if pl.initialized {
+		return pl.hasFlag(commands)
+	} else {
+		return 0, false
+	}
 }
 
 func GetConfig[T any](name string) (*T, bool) {
