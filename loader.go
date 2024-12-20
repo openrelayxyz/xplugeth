@@ -107,13 +107,16 @@ func (pl *pluginLoader) hasModule(name string) bool {
 func (pl *pluginLoader) parseCommands(commands []string) (int,bool) {
 	var i int
 	var ok bool
-	if i, ok = pl.hasSubcommand(commands); ok && pl.initialized {
-		return i, ok
+	if pl.initialized {
+		if i, ok = pl.hasSubcommand(commands); ok {
+			pl.hasFlag(commands)
+			return i, ok
+		}
+		if i, ok = pl.hasFlag(commands); ok {
+			return i, ok
+		}
 	}
-	if i, ok = pl.hasFlag(commands); ok && pl.initialized {
-		return i, ok
-	}
-	return i, ok
+	return 0, false
 }
 
 func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
