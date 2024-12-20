@@ -1,9 +1,9 @@
 package peereval
 
 import (
-	"encoding/json"
+	"flag"
 	"fmt"
-	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -20,27 +20,24 @@ import (
 )
 
 type PeerMetrics struct {
-	ID                    string
-	BlocksContributed     int
-	ContributionIntervals map[int]bool
-	LastConnected         time.Time
-	LastDisconnected      time.Time
-	IsConnected           bool
-	ConnectedTime         time.Duration
+	ID                string
+	BlocksContributed int
+	LastConnected     time.Time
+	LastDisconnected  time.Time
+	IsConnected       bool
+	ConnectedTime     time.Duration
 }
 
 var (
-	client         *rpc.Client
-	gatheringCount int
-	called         bool
-	activePeerData []map[string]interface{}
+	client *rpc.Client
 
-	intervalDuration = 10
-	currentInterval  = 0
-	monitoringPeriod = 100
-	blockCount       = 0
-	pollingInterval  = time.Minute
-	averageBlockTime = 15.0
+	blockCount = 0
+	maxPeers   int
+
+	flags                     = *flag.NewFlagSet("peereval-plugin", flag.ContinueOnError)
+	maxPeerCount              = flags.Int("peereval.max.peers", 0, "max peer value for peer eval plugin")
+	pollingInterval           = flags.Duration("peereval.polling.interval", time.Minute, "polling interval for peer monitoring")
+	connectionTimeCoefficient = flags.Duration("peereval.connection.time.coefficient", 5*time.Minute, "minimum connection time before evaluating peers")
 )
 
 type peerEvalPlugin struct {
@@ -53,6 +50,11 @@ func init() {
 }
 
 func (p *peerEvalPlugin) InitializeNode(s *node.Node, _ types.Backend) {
+	if *maxPeerCount == 0 {
+		log.Warn("max peer count flag not set, peer eval plugin, setting to a default of 20")
+		maxPeers = 20
+	}
+
 	client = s.Attach()
 	p.peerMetricsMap = make(map[string]*PeerMetrics)
 	p.StartPeerMonitoring()
@@ -80,58 +82,22 @@ func getPeers() ([]string, error) {
 }
 
 func (p *peerEvalPlugin) PeerEval(id string, headers []*gtypes.Header) {
-	gatheringCount++
 	blockCount += len(headers)
-	log.Error(fmt.Sprintf("blockcount %v", blockCount))
-
-	currentInterval = blockCount / intervalDuration
 
 	if _, exists := p.peerMetricsMap[id]; !exists {
 		p.peerMetricsMap[id] = &PeerMetrics{
-			ID:                    id,
-			ContributionIntervals: make(map[int]bool),
-			IsConnected:           true,
-			LastConnected:         time.Now(),
+			ID:            id,
+			IsConnected:   true,
+			LastConnected: time.Now(),
 		}
 	}
 
 	peerMetric := p.peerMetricsMap[id]
 	peerMetric.BlocksContributed += len(headers)
-	peerMetric.ContributionIntervals[currentInterval] = true
-
-	if blockCount >= monitoringPeriod {
-		blockCount = 0
-		currentInterval = 0
-		p.evaluatePeers()
-		p.resetMetrics()
-	}
-
-	// log.Error(fmt.Sprintf("Gathering peer data, count %v/100", gatheringCount))
-
-	// t := time.Now().Format("20060102_150405")
-
-	// blockNumbers := []string{}
-	// for _, header := range headers {
-	// 	blockNumbers = append(blockNumbers, header.Number.String())
-	// }
-	// evalData := map[string]interface{}{
-	// 	"id":     id,
-	// 	"time":   t,
-	// 	"blocks": blockNumbers,
-	// }
-	// activePeerData = append(activePeerData, evalData)
-	// if gatheringCount >= 100 {
-	// 	gatheringCount = 0
-	// 	if called {
-	// 		called = false
-	// 		returnPeerData()
-	// 	}
-	// 	activePeerData = activePeerData[:0]
-	// }
 }
 
 func (p *peerEvalPlugin) StartPeerMonitoring() {
-	ticker := time.NewTicker(pollingInterval)
+	ticker := time.NewTicker(*pollingInterval)
 	go func() {
 		for range ticker.C {
 			p.updatePeerConnections()
@@ -156,17 +122,16 @@ func (p *peerEvalPlugin) updatePeerConnections() {
 		peerMetric, exists := p.peerMetricsMap[id]
 		if !exists {
 			p.peerMetricsMap[id] = &PeerMetrics{
-				ID:                    id,
-				ContributionIntervals: make(map[int]bool),
-				IsConnected:           true,
-				LastConnected:         time.Now(),
+				ID:            id,
+				IsConnected:   true,
+				LastConnected: time.Now(),
 			}
 		} else if !peerMetric.IsConnected {
-
 			peerMetric.IsConnected = true
 			peerMetric.LastConnected = time.Now()
 		}
 	}
+
 	for id, peerMetric := range p.peerMetricsMap {
 		if !currentPeers[id] && peerMetric.IsConnected {
 			peerMetric.IsConnected = false
@@ -174,76 +139,55 @@ func (p *peerEvalPlugin) updatePeerConnections() {
 			peerMetric.ConnectedTime += peerMetric.LastDisconnected.Sub(peerMetric.LastConnected)
 		}
 	}
-}
 
-func (p *peerEvalPlugin) evaluatePeers() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	if len(p.peerMetricsMap) < int(float64(maxPeers)*0.9) {
+		return
+	}
 
-	for _, peerMetric := range p.peerMetricsMap {
-		consistencyScore := len(peerMetric.ContributionIntervals)
+	peerRatios := make(map[string]float64)
+	var peersToDrop []string
 
-		if peerMetric.IsConnected {
-			peerMetric.ConnectedTime += time.Since(peerMetric.LastConnected)
-			peerMetric.LastConnected = time.Now()
+	for id, peer := range p.peerMetricsMap {
+		if peer.IsConnected {
+			connectedDuration := peer.ConnectedTime + time.Since(peer.LastConnected)
+			if connectedDuration >= *connectionTimeCoefficient {
+				peerRatios[id] = float64(peer.BlocksContributed) / connectedDuration.Seconds()
+			}
 		}
-
-		totalElapsedTime := time.Since(peerMetric.LastConnected) + peerMetric.ConnectedTime
-		uptimePercentage := (peerMetric.ConnectedTime.Seconds() / totalElapsedTime.Seconds()) * 100
-
-		log.Error(fmt.Sprintf("Peer Metrics\nID: %s\nBlocksContributed: %d\nConsistencyScore: %d\nUptimePercentage: %.2f",
-			peerMetric.ID,
-			peerMetric.BlocksContributed,
-			consistencyScore,
-			uptimePercentage,
-		))
 	}
+
+	if len(peerRatios) == 0 {
+		return
+	}
+
+	dropCount := int(float64(len(peerRatios)) * 0.1)
+	if dropCount > 0 {
+		peers := make([]string, 0, len(peerRatios))
+		for id := range peerRatios {
+			peers = append(peers, id)
+		}
+		sort.Slice(peers, func(i, j int) bool {
+			return peerRatios[peers[i]] < peerRatios[peers[j]]
+		})
+		peersToDrop = peers[:dropCount]
+		p.removePeers(peersToDrop)
+	}
+
 }
 
-func (p *peerEvalPlugin) resetMetrics() {
-	for _, peerMetric := range p.peerMetricsMap {
-		peerMetric.BlocksContributed = 0
-		peerMetric.ContributionIntervals = make(map[int]bool)
-		// peerMetric.ConnectedTime = 0
-		// peerMetric.LastConnected = time.Now()
-		// peerMetric.IsConnected = true
-	}
-}
-
-func returnPeerData() {
-	log.Error("gathering peer data for return")
-	peerSlice, err := getPeers()
-	if err != nil {
-		log.Error("error obtaining peer slice", "err", err)
-
-	}
-	data := make(map[string]interface{})
-	data["peers"] = peerSlice
-	data["active"] = activePeerData
-
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		log.Error("error marshaling JSON", "err", err)
-	}
-
-	file, err := os.Create(fmt.Sprintf("peer-data-%v.json", time.Now().Format("20060102_150405")))
-	if err != nil {
-		log.Error("error creating file", "err", err)
-	}
-	defer file.Close()
-
-	_, err = file.Write(jsonData)
-	if err != nil {
-		log.Error("error writing to file return PeerData", "err", err)
+func (p *peerEvalPlugin) removePeers(peers []string) {
+	for _, id := range peers {
+		var result bool
+		if err := client.Call(&result, "admin_removePeer", fmt.Sprintf("enode://%s", id)); err != nil {
+			log.Error("Failed to remove peer", "id", id, "err", err)
+		} else {
+			log.Info("Removed peer", "id", id)
+			delete(p.peerMetricsMap, id)
+		}
 	}
 }
 
 type peerEvalAPI struct{}
-
-func (p *peerEvalAPI) GetPeerData() string {
-	called = true
-	return "signal set"
-}
 
 func (p *peerEvalAPI) TestPeerEval() string {
 	return "calling from peer eval"
