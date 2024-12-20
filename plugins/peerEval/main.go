@@ -58,6 +58,7 @@ func (p *peerEvalPlugin) InitializeNode(s *node.Node, _ types.Backend) {
 	client = s.Attach()
 	p.peerMetricsMap = make(map[string]*PeerMetrics)
 	p.StartPeerMonitoring()
+	p.cleanUpPeerMap()
 }
 
 func getPeers() ([]string, error) {
@@ -103,6 +104,21 @@ func (p *peerEvalPlugin) StartPeerMonitoring() {
 			p.updatePeerConnections()
 		}
 	}()
+}
+
+func (p *peerEvalPlugin) cleanUpPeerMap() {
+	ticker := time.NewTicker(*pollingInterval)
+	go func() {
+		for range ticker.C {
+			for id, peer := range p.peerMetricsMap {
+				connectedDuration := peer.ConnectedTime + time.Since(peer.LastConnected)
+				if !peer.IsConnected && connectedDuration >= *connectionTimeCoefficient {
+					delete(p.peerMetricsMap, id)
+				}
+			}
+		}
+	}()
+
 }
 
 func (p *peerEvalPlugin) updatePeerConnections() {
@@ -171,6 +187,7 @@ func (p *peerEvalPlugin) updatePeerConnections() {
 		})
 		peersToDrop = peers[:dropCount]
 		p.removePeers(peersToDrop)
+
 	}
 
 }
