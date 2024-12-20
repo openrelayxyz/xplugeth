@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	cli "github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -80,9 +79,9 @@ var (
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").Bytes()
 	// emptyCode is the known hash of the empty EVM bytecode.
 	emptyCode = crypto.Keccak256(nil)
-	Subcommands = map[string]func(cli.Context, []string) error {
+	subCommands = map[string]func([]string) error {
 		"triedump": trieDump,
-		"statedump": func(cli.Context, []string) error {
+		"statedump": func([]string) error {
 			log.Info("Starting state dump")
 			db := backend.ChainDb()
 			snaprootbytes, _ := db.Get(snapRootKey)

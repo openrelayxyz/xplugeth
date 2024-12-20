@@ -1,6 +1,4 @@
-//go:build !patchset
 package producer
-
 
 import (
 	"fmt"
@@ -8,7 +6,6 @@ import (
 	"context"
 	"strconv"
 	"github.com/hashicorp/golang-lru"
-	cli "github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/common"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
@@ -269,9 +266,10 @@ func stateTrieUpdatesByNumber(i int64) (map[common.Hash]struct{}, map[common.Has
 }
 
 
-func trieDump (ctx cli.Context, args []string) error {
+func trieDump (args []string) error {
 	log.Info("Starting trie dump")
 	header := backend.CurrentHeader()
+
 	startBlock := int64(0)
 	endBlock := header.Number.Int64()
 	if len(args) > 0 {
@@ -294,7 +292,7 @@ func trieDump (ctx cli.Context, args []string) error {
 		return err
 	}
 	var lastTrie state.Trie
-	lastTrie, err = getTrie(lastHeader.Root)
+	lastTrie, err = getTrie(lastHeader.Hash())
 	if err != nil {
 		log.Error("error returned acquiring trie for last header root stateTrieUpdatesByNumber, producer", "err", err)
 	}

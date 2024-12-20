@@ -2,8 +2,10 @@ package example
 
 import (
 	"context"
+	"errors"
+	"flag"	
 	"time"
-	
+
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -15,9 +17,19 @@ import (
 )
 
 
-type exampleModule struct {}
+var (
+	flags = *flag.NewFlagSet("example-plugin", flag.ContinueOnError)
+	exampleBoolFlag = flags.Bool("example.bool.flag", false, "example bool flag for xplugeth")
+	exampleStringFlag = flags.String("example.string.flag", "", "example string flag for xplugeth")
+)
+
+
+type exampleModule struct {
+}
 
 func init() {
+	xplugeth.RegisterFlags(flags)
+	xplugeth.RegisterSubCommands(subCommands)
 	xplugeth.RegisterModule[exampleModule]("example")
 }
 
@@ -31,6 +43,13 @@ var cfg *ExampleConfig
 
 func (*exampleModule) InitializeNode(*node.Node, types.Backend) {
 	log.Info("Example module initialized")
+
+	if *exampleBoolFlag {
+		log.Info("example bool flag set, example plugin")
+	}
+	if *exampleStringFlag != "" {
+		log.Info("example string flag set, example plugin", "value", *exampleStringFlag)
+	}
 	
 	var ok bool
 	cfg, ok = xplugeth.GetConfig[ExampleConfig]("example")
@@ -80,6 +99,22 @@ func (es *exampleAPIService) Ticker(ctx context.Context) (<-chan int, error) {
 	}()
 	return ch, nil
 }
+
+var (
+	subCommands map[string]func([]string)error = map[string]func([]string)error {
+		"exampleSubComOne": func([]string) error {
+				log.Info("you ran the FIRST subcommand")
+				return nil
+		},
+		"exampleSubComTwo": func([]string) error {
+				log.Info("you ran the SECOND subcommand")
+				return nil
+		},
+		"exampleSubComThree": func([]string) error {
+			return errors.New("the third subcommand returns this error")
+		},
+	}
+)
 
 var (
 	_ apis.GetAPIs = (*exampleModule)(nil)
