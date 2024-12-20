@@ -17,6 +17,7 @@ import (
 var configPath string
 
 type pluginLoader struct {
+	initialized bool
 	modules []reflect.Type
 	hookInterfaces []reflect.Type
 	hooks map[reflect.Type][]any
@@ -57,6 +58,7 @@ func (pl *pluginLoader) registerFlags(provided flag.FlagSet) {
 }
 
 func (pl *pluginLoader) initialize(dirpath string) {
+	pl.initialized = true
 	pl.hooks = make(map[reflect.Type][]any)
 	for _, mt := range pl.modules {
 		mv := reflect.New(mt)
@@ -105,13 +107,16 @@ func (pl *pluginLoader) hasModule(name string) bool {
 func (pl *pluginLoader) parseCommands(commands []string) (int,bool) {
 	var i int
 	var ok bool
-	if i, ok = pl.hasSubcommand(commands); ok {
-		return i, ok
+	if pl.initialized {
+		if i, ok = pl.hasSubcommand(commands); ok {
+			pl.hasFlag(commands)
+			return i, ok
+		}
+		if i, ok = pl.hasFlag(commands); ok {
+			return i, ok
+		}
 	}
-	if i, ok = pl.hasFlag(commands); ok {
-		return i, ok
-	}
-	return i, ok
+	return 0, false
 }
 
 func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
@@ -195,11 +200,11 @@ func RegisterModule[t any](name string) {
 }
 
 func RegisterSubCommands(funcs map[string]func([]string)error) {
-	pl.registerSubCommands(funcs)
+		pl.registerSubCommands(funcs)
 }
 
 func RegisterFlags(flags flag.FlagSet) {
-	pl.registerFlags(flags)
+		pl.registerFlags(flags)
 }
 
 func RegisterHook[t any](p ...Patchset) {
@@ -244,16 +249,8 @@ func ParseCommands(commands []string) (int,bool) {
 	return pl.parseCommands(commands)
 }
 
-func HasSubcommand(commands []string) (int, bool) {
-	return pl.hasSubcommand(commands)
-}
-
 func RunSubcommand() (bool, error) {
 	return pl.runSubcommand()
-}
-
-func HasFlag(commands []string) (int, bool) {
-	return pl.hasFlag(commands)
 }
 
 func GetConfig[T any](name string) (*T, bool) {
