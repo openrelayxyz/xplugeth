@@ -17,6 +17,7 @@ import (
 var configPath string
 
 type pluginLoader struct {
+	initialized bool
 	modules []reflect.Type
 	hookInterfaces []reflect.Type
 	hooks map[reflect.Type][]any
@@ -57,6 +58,7 @@ func (pl *pluginLoader) registerFlags(provided flag.FlagSet) {
 }
 
 func (pl *pluginLoader) initialize(dirpath string) {
+	pl.initialized = true
 	pl.hooks = make(map[reflect.Type][]any)
 	for _, mt := range pl.modules {
 		mv := reflect.New(mt)
@@ -195,11 +197,15 @@ func RegisterModule[t any](name string) {
 }
 
 func RegisterSubCommands(funcs map[string]func([]string)error) {
-	pl.registerSubCommands(funcs)
+	if pl.initialized {
+		pl.registerSubCommands(funcs)
+	}
 }
 
 func RegisterFlags(flags flag.FlagSet) {
-	pl.registerFlags(flags)
+	if pl.initialized {
+		pl.registerFlags(flags)
+	}
 }
 
 func RegisterHook[t any](p ...Patchset) {
