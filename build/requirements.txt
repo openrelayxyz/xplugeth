@@ -1,0 +1,2 @@
+sh==2.1.0
+# Requires Python >= 3.12.3

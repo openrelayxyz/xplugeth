@@ -9,6 +9,16 @@ import json
 import random
 import string
 
+import_template = """
+//go:build xplugeth
+package main
+
+import (
+	_ "github.com/openrelayxyz/xplugeth"
+)
+
+"""
+
 patchset_go = """
 package main
 
@@ -67,8 +77,7 @@ def apply_patch(patch):
             print(test["package"], "-run", testName)
             print(go.test(test["package"], "-run", testName))
 
-
-def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
+def main(remote, tag, plugins, cmd, artifacts_directory, workdir, local):
     if not os.path.exists(os.path.join(workdir, ".git")):
         git.clone(remote, workdir)
     else:
@@ -83,6 +92,12 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
         git.reset("HEAD", "--hard")
         git.clean("-fdx")
         git.checkout(tag)
+        if local:
+            with open(os.path.join(cmd, "xplugeth_imports.go"), "w") as fd:
+                fd.write(import_template)
+            go.modtidy
+            with open("go.mod", "a") as file:
+                file.write("\n" + f"replace github.com/openrelayxyz/xplugeth => {local}")
         with open(os.path.join(cmd, "xplugeth_imports.go"), "w") as fd:
             fd.write("//go:build xplugeth\npackage main\nimport (\n")
             for plugin in plugins:
@@ -116,11 +131,12 @@ if __name__ == "__main__":
     parser.add_argument('-c', '--cmd', default="./cmd/geth")
     parser.add_argument('-w', '--workdir', default=None)
     parser.add_argument('-a', '--artifacts-directory', default="/tmp/output/")
+    parser.add_argument('-r', '--local-replacement', default=None)
 
     args = parser.parse_args()
     if args.workdir:
-        main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, args.workdir)
+        main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, args.workdir, args.local_replacement)
     else:
         with tempfile.TemporaryDirectory() as workdir:
-            main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, workdir)
+            main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, workdir, args.local_replacement)
             
