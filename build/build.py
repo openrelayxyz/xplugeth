@@ -68,7 +68,7 @@ def apply_patch(patch):
             print(go.test(test["package"], "-run", testName))
 
 
-def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
+def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements):
     if not os.path.exists(os.path.join(workdir, ".git")):
         git.clone(remote, workdir)
     else:
@@ -83,6 +83,9 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir):
         git.reset("HEAD", "--hard")
         git.clean("-fdx")
         git.checkout(tag)
+        with open("go.mod", "a") as fd:
+            for package, local in replacements:
+                fd.write(f"\n{package} => {local}")
         with open(os.path.join(cmd, "xplugeth_imports.go"), "w") as fd:
             fd.write("//go:build xplugeth\npackage main\nimport (\n")
             for plugin in plugins:
@@ -113,13 +116,16 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--source-remote', default="https://github.com/ethereum/go-ethereum") 
     parser.add_argument('-t', '--source-tag', default="v1.14.12")
     parser.add_argument('-p', '--plugin', action="append", default=[])
+    parser.add_argument('-r', '--replace', action="append", default=[])
     parser.add_argument('-c', '--cmd', default="./cmd/geth")
     parser.add_argument('-w', '--workdir', default=None)
     parser.add_argument('-a', '--artifacts-directory', default="/tmp/output/")
 
     args = parser.parse_args()
+
+    replacements = [replace.split("=") for replace in args.replace]
     if args.workdir:
-        main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, args.workdir)
+        main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, args.workdir, replacements)
     else:
         with tempfile.TemporaryDirectory() as workdir:
             main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, workdir)
