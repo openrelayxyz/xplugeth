@@ -85,7 +85,7 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements):
         git.checkout(tag)
         with open("go.mod", "a") as fd:
             for package, local in replacements:
-                fd.write(f"\n{package} => {local}")
+                fd.write(f"\n replace {package} => {local}")
         with open(os.path.join(cmd, "xplugeth_imports.go"), "w") as fd:
             fd.write("//go:build xplugeth\npackage main\nimport (\n")
             for plugin in plugins:
@@ -123,10 +123,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    for item in args.replace:
+        if '=' not in item:
+            print(f"arguments to replace must contain an '='")
+            sys.exit()
     replacements = [replace.split("=") for replace in args.replace]
+
     if args.workdir:
         main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, args.workdir, replacements)
     else:
         with tempfile.TemporaryDirectory() as workdir:
-            main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, workdir)
+            main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, workdir, replacements)
             
