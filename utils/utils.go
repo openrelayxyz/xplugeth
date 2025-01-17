@@ -31,7 +31,11 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	var parentBlockJson map[string]json.RawMessage
 	client := s.Attach()
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
-	raw := parentBlockJson["totalDifficulty"]
+	raw, ok := parentBlockJson["totalDifficulty"]
+	if !ok {
+		result := big.NewInt(58750003716598352816469)
+		return result, nil
+	}
 	var td string
 	if err := json.Unmarshal(raw, &td); err != nil {
 		return nil, err
