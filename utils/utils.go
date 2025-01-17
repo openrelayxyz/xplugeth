@@ -24,6 +24,7 @@ func GetChainID() (int64, bool) {
 }
 
 func GetTd(hash common.Hash) (*big.Int, error) {
+	result := new(big.Int)
 	s, ok := xplugeth.GetSingleton[*node.Node]()
 	if !ok {
 		return nil, errors.New("failed to acqire stack singleton, GetTd")
@@ -33,14 +34,13 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
 	raw, ok := parentBlockJson["totalDifficulty"]
 	if !ok {
-		result := big.NewInt(58750003716598352816469)
+		result.SetString("58750003716598352816469", 10)
 		return result, nil
 	}
 	var td string
 	if err := json.Unmarshal(raw, &td); err != nil {
 		return nil, err
 	}
-	result := new(big.Int)
 	if _, ok := result.SetString(td, 0); !ok {
 		return nil, errors.New("convert total difficulty string to big int")
 	} 
