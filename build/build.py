@@ -114,7 +114,7 @@ if __name__ == "__main__":
                     prog='xplugeth',
                     description='Build extended Geth binaries')
     parser.add_argument('-s', '--source-remote', default="https://github.com/ethereum/go-ethereum") 
-    parser.add_argument('-t', '--source-tag', default="v1.14.12")
+    parser.add_argument('-t', '--source-tag', default="v1.14.13")
     parser.add_argument('-p', '--plugin', action="append", default=[])
     parser.add_argument('-r', '--replace', action="append", default=[])
     parser.add_argument('-c', '--cmd', default="./cmd/geth")

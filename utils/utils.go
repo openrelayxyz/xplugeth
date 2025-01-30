@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -34,7 +35,16 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
 	raw, ok := parentBlockJson["totalDifficulty"]
 	if !ok {
-		result.SetString("58750003716598352816469", 10)
+		chainid, ok := GetChainID()
+		if !ok { panic(fmt.Sprintf("could not resolve chain id from within GetTd")) }
+		switch chainid {
+		case int64(1):
+			result.SetString("58750003716598352816469", 10)
+		case int64(11155111):
+			result.SetString("17000018015853232", 10)
+		default:
+			result.SetString("1", 10)
+		}
 		return result, nil
 	}
 	var td string
