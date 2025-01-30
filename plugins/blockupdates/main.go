@@ -37,7 +37,6 @@ var (
 	recentEmits *lru.Cache
 	blockEvents *event.Feed
 	suCh chan *stateUpdateWithRoot
-	chainid int64
 )
 
 
@@ -199,11 +198,6 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	cache, _ = lru.New(128)
 	recentEmits, _ = lru.New(128)
 	suCh = make(chan *stateUpdateWithRoot, 128)
-	var ok bool
-	chainid, ok = utils.GetChainID() 
-	if !ok {
-		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, blockupdates"))
-	}
 	
 	go func () {
 		db := b.ChainDb()
@@ -281,7 +275,7 @@ func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 				log.Error("Could not decode block during reorg", "hash", hash, "err", err)
 				return
 			}
-		td, err := utils.GetTd(parentBlock.Hash(), chainid)
+		td, err := utils.GetTd(parentBlock.Hash())
 		if err != nil {
 			log.Error("error acquiring total difficulty, newHead, blockupdates", "hash", hash, "err", err)
 			return
@@ -311,7 +305,7 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 			log.Error("Could not get block for reorg", "hash", blockHash, "err", err)
 			return
 		}
-		td, err := utils.GetTd(blockHash, chainid)
+		td, err := utils.GetTd(blockHash)
 		if err != nil {
 			log.Error("error acquiring total difficulty, Reorg, blockupdates", "hash", blockHash, "err", err)
 			return
@@ -334,7 +328,7 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 	}
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
 
-	td, err := utils.GetTd(block.Hash(), chainid)
+	td, err := utils.GetTd(block.Hash())
 	if err != nil {
 		log.Error("error acquiring total difficulty, BlockupdatesByNumber", "hash", block.Hash(), "err", err)
 		return nil, nil, nil, nil, nil, nil, nil, err
