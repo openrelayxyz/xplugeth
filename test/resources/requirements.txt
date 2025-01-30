@@ -1,0 +1,8 @@
+cytoolz==1.0.1
+eth-hash==0.7.1
+eth-typing==5.1.0
+eth-utils==5.1.0
+rlp==4.0.1
+toolz==1.0.0
+typing_extensions==4.12.2
+websockets==14.1
