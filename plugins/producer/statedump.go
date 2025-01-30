@@ -94,7 +94,12 @@ var (
 				if err != nil { return err }
 			}
 			blockno := uint64(header.Number.Int64())
-			td, err := utils.GetTd(header.Hash())
+			var ok bool
+			chainid, ok = utils.GetChainID() 
+			if !ok {
+				panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, producer statedump"))
+			}
+			td, err := utils.GetTd(header.Hash(), chainid)
 			if err != nil {
 				log.Error("error acquiring total difficulty, statedump, producer", "hash", header.Hash(), "err", err)
 				return err

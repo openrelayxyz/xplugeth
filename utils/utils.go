@@ -23,7 +23,7 @@ func GetChainID() (int64, bool) {
 	return int64(hex), true
 }
 
-func GetTd(hash common.Hash) (*big.Int, error) {
+func GetTd(hash common.Hash, id int64) (*big.Int, error) {
 	result := new(big.Int)
 	s, ok := xplugeth.GetSingleton[*node.Node]()
 	if !ok {
@@ -34,6 +34,9 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
 	raw, ok := parentBlockJson["totalDifficulty"]
 	if !ok {
+		if id == int64(1) {
+			result.SetString("58750003716598352816469", 10)
+		}
 		result.SetString("1", 10)
 		return result, nil
 	}
