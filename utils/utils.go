@@ -34,7 +34,7 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
 	raw, ok := parentBlockJson["totalDifficulty"]
 	if !ok {
-		result.SetString("58750003716598352816469", 10)
+		result.SetString("1", 10)
 		return result, nil
 	}
 	var td string

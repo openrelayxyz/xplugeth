@@ -69,16 +69,7 @@ func getSafeFinalized() (*big.Int, *big.Int) {
 }
 
 func (*mergePlugin) CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
-	if !postMerge {
-		v, _ := backend.ChainDb().Get([]byte("eth2-transition"))
-		if len(v) > 0 {
-			postMerge = true
-		} else {
-			// Not yet post merge, we don't want to make any modifications
-			gethWeightGauge.Update(new(big.Int).Div(weight, big.NewInt(10000000000000000)).Int64())
-			return
-		}
-	}
+	
 	snum, fnum := getSafeFinalized()
 	if snum != nil {
 		updates[fmt.Sprintf("c/%x/n/safe", chainid)] = snum.Bytes()
