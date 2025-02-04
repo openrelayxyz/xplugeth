@@ -42,7 +42,8 @@ def main():
         f"python3 {build_path} "
         "-s https://github.com/ethereum/go-ethereum "
         "-p github.com/openrelayxyz/xplugeth/plugins/merge@v0.12.0 "
-        f"-r github.com/openrelayxyz/xplugeth={XPLUGETH_PATH}"
+        f"-r github.com/openrelayxyz/xplugeth={XPLUGETH_PATH} "
+        f"-a {os.path.abspath('./resources')}"
     )
     print(build_command)
     subprocess.run(build_command, shell=True)
@@ -50,8 +51,8 @@ def main():
     if os.path.exists(DATADIR):
         shutil.rmtree(DATADIR)
     os.makedirs(DATADIR)
-    if not os.path.exists("./resources/geth"):
-        shutil.copy("/tmp/output/geth", "./resources/geth")
+    # if not os.path.exists("./resources/geth"):
+    #     shutil.copy("/tmp/output/geth", "./resources/geth")
         
     print(">starting the node")    
     process = subprocess.Popen(
