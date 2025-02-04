@@ -2,14 +2,14 @@ import os, shutil, subprocess, time, gzip, sys, logging
 from compare_cardinal import test_cardinal
 from ws_data_capture import subscribe_to_websocket
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
 DATADIR = './resources/datadir/'
 XPLUGETH_PATH = '/Users/jesseakoh/Desktop/work/code/OpenRelay/xplugeth'
 
 
 def import_chain():
-    logging.INFO("importing chain")
+    logging.info("importing chain")
     import_command = (
         "curl 127.0.0.1:8545 "
         "-H 'Content-Type: application/json' "
@@ -17,17 +17,17 @@ def import_chain():
     )
     result = subprocess.run(import_command, shell=True)
     if result.returncode != 0 :
-        logging.ERROR("Chain import failed: Unable to connect to 127.0.0.1:8545")
+        logging.error("Chain import failed: Unable to connect to 127.0.0.1:8545")
         sys.exit(1)
 
 def decompress_control_data():
-    logging.INFO("decompressing control data")
+    logging.info("decompressing control data")
     with gzip.open('./resources/control_card_data.json.gz', "rb") as f:
         with open('./resources/control_card_data.json', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
 
 def cleanup():
-    logging.INFO("cleanup")
+    logging.info("cleanup")
     if os.path.exists("./resources/test_card_data.json"):
         os.remove("./resources/test_card_data.json")
     
@@ -36,14 +36,13 @@ def cleanup():
             shutil.copyfileobj(f, f_o)
   
 def main():
-    logging.INFO("building geth")
+    logging.info("building geth")
     build_path = os.path.abspath('../build/build.py')
     build_command = (
         f"python3 {build_path} "
         "-s https://github.com/ethereum/go-ethereum "
         "-p github.com/openrelayxyz/xplugeth/plugins/merge@v0.12.0 "
-        f"-r github.com/openrelayxyz/xplugeth={XPLUGETH_PATH} "
-        "-a ./resources/"
+        f"-r github.com/openrelayxyz/xplugeth={XPLUGETH_PATH}"
     )
     print(build_command)
     subprocess.run(build_command, shell=True)
@@ -68,7 +67,7 @@ def main():
         import_chain()
         subscribe_to_websocket('test_card_data', 'cardinal')
     except Exception as e:
-        logging.ERROR(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
         sys.exit(1)
     finally:
         time.sleep(2)
