@@ -1,26 +1,33 @@
-import os, shutil, subprocess, time, gzip
+import os, shutil, subprocess, time, gzip, sys, logging
 from compare_cardinal import test_cardinal
 from ws_data_capture import subscribe_to_websocket
 
-DATADIR = './datadir/'
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+DATADIR = './resources/datadir/'
 XPLUGETH_PATH = '/Users/jesseakoh/Desktop/work/code/OpenRelay/xplugeth'
 
 
 def import_chain():
-    print(">importing chain")
+    logging.INFO("importing chain")
     import_command = (
         "curl 127.0.0.1:8545 "
         "-H 'Content-Type: application/json' "
         "--data '{\"jsonrpc\": \"2.0\", \"method\": \"admin_importChain\", \"params\": [\"./resources/midChain.gz\"], \"id\": 22}'"
     )
-    subprocess.run(import_command, shell=True)
+    result = subprocess.run(import_command, shell=True)
+    if result.returncode != 0 :
+        logging.ERROR("Chain import failed: Unable to connect to 127.0.0.1:8545")
+        sys.exit(1)
 
 def decompress_control_data():
+    logging.INFO("decompressing control data")
     with gzip.open('./resources/control_card_data.json.gz', "rb") as f:
         with open('./resources/control_card_data.json', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
 
 def cleanup():
+    logging.INFO("cleanup")
     if os.path.exists("./resources/test_card_data.json"):
         os.remove("./resources/test_card_data.json")
     
@@ -29,7 +36,7 @@ def cleanup():
             shutil.copyfileobj(f, f_o)
   
 def main():
-    print(">building geth")
+    logging.INFO("building geth")
     build_path = os.path.abspath('../build/build.py')
     build_command = (
         f"python3 {build_path} "
@@ -44,7 +51,10 @@ def main():
     if os.path.exists(DATADIR):
         shutil.rmtree(DATADIR)
     os.makedirs(DATADIR)
-
+    if not os.path.exists("./resources/geth"):
+        shutil.copy("/tmp/output/geth", "./resources/geth")
+        
+    print(">starting the node")    
     process = subprocess.Popen(
         f"./resources/geth --nodiscover --holesky "
         "--http --http.api=eth,admin,plugeth,cardinal "
@@ -56,8 +66,11 @@ def main():
 
     try:
         import_chain()
-        subscribe_to_websocket('test_card_data',  'cardinal')
-    finally: 
+        subscribe_to_websocket('test_card_data', 'cardinal')
+    except Exception as e:
+        logging.ERROR(f"An error occurred: {e}")
+        sys.exit(1)
+    finally:
         time.sleep(2)
         process.terminate()
         process.wait()
