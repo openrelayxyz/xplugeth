@@ -6,6 +6,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
 DATADIR = './resources/datadir/'
 XPLUGETH_PATH = '/Users/jesseakoh/Desktop/work/code/OpenRelay/xplugeth'
+# Add a step to obtain the entire absolute path from the os library and then split it and remove the /test/ bit
 
 
 def import_chain():
@@ -27,6 +28,7 @@ def decompress_control_data():
             shutil.copyfileobj(f, f_o)
 
 def cleanup():
+    # I think you are going to want to remove the geth binary and data dir as well here
     logging.info("cleanup")
     if os.path.exists("./resources/test_card_data.json"):
         os.remove("./resources/test_card_data.json")
@@ -76,9 +78,28 @@ def main():
         process.wait()
     
     decompress_control_data()
+    # I would like to bring in a testing library. And perform this test in a separate process. 
     test_cardinal()
     cleanup()
 
 
 if __name__ == '__main__':
     main()
+
+# From my perspective we have several processes within one procedure here:
+# - building the binary to be tested
+# - turning on the node and importing the chain / deleting the binary and data files. 
+# - harvesting the test data (two different ways)
+# - analysing the data for accuracy 
+
+# I think we should separate these out into three different jobs:
+# - building the tag
+# - node operations (including cleanup)
+# - testing the data
+
+# I would organize the functions into those three seperate clusters and then pull them in as necessary in the main function. 
+
+# For the testing I would like to use a testing library. I am familar with pytest. There may be others that are better for
+# this application, I will leave that up to your discretion. 
+
+# please excuse my spelling errors :)
