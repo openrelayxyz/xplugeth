@@ -1,62 +1,70 @@
 import os, shutil, subprocess, time, gzip, sys, logging
+import pytest, asyncio
 from compare_cardinal import test_cardinal
 from ws_data_capture import subscribe_to_websocket
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
 DATADIR = './resources/datadir/'
-XPLUGETH_PATH = '/Users/jesseakoh/Desktop/work/code/OpenRelay/xplugeth'
-# Add a step to obtain the entire absolute path from the os library and then split it and remove the /test/ bit
 
 
 def import_chain():
-    logging.info("importing chain")
-    import_command = (
-        "curl 127.0.0.1:8545 "
-        "-H 'Content-Type: application/json' "
-        "--data '{\"jsonrpc\": \"2.0\", \"method\": \"admin_importChain\", \"params\": [\"./resources/midChain.gz\"], \"id\": 22}'"
-    )
-    result = subprocess.run(import_command, shell=True)
-    if result.returncode != 0 :
-        logging.error("Chain import failed: Unable to connect to 127.0.0.1:8545")
-        sys.exit(1)
+        logging.info("importing chain")
+        import_command = (
+            "curl 127.0.0.1:8545 "
+            "-H 'Content-Type: application/json' "
+            "--data '{\"jsonrpc\": \"2.0\", \"method\": \"admin_importChain\", \"params\": [\"./resources/midChain.gz\"], \"id\": 22}'"
+        )
+        result = subprocess.run(import_command, shell=True)
+        if result.returncode != 0 :
+            logging.error(" hain import failed: unable to connect to 127.0.0.1:8545")
+            sys.exit(1)
 
 def decompress_control_data():
     logging.info("decompressing control data")
-    with gzip.open('./resources/control_card_data.json.gz', "rb") as f:
+    with gzip.open('./resources/v1.14.7.0.5-control-data/p1bu.json.gz', "rb") as f:
+    #with gzip.open('./resources/control_card_data.json.gz', "rb") as f:
         with open('./resources/control_card_data.json', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
 
 def cleanup():
-    # I think you are going to want to remove the geth binary and data dir as well here
     logging.info("cleanup")
     if os.path.exists("./resources/test_card_data.json"):
         os.remove("./resources/test_card_data.json")
     
-    with open("./resources/control_card_data.json", "rb") as f:
+    if os.path.exists("./resources/geth"):
+        os.remove("./resources/geth")
+
+    if os.path.exists(DATADIR):
+        shutil.rmtree(DATADIR)
+    
+    with open("./resources/control_card_data.json", "r") as f:
         with gzip.open('./resources/control_card_data.json.gz', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
   
-def main():
+def build():
     logging.info("building geth")
     build_path = os.path.abspath('../build/build.py')
     build_command = (
         f"python3 {build_path} "
         "-s https://github.com/ethereum/go-ethereum "
         "-p github.com/openrelayxyz/xplugeth/plugins/merge@v0.12.0 "
-        f"-r github.com/openrelayxyz/xplugeth={XPLUGETH_PATH} "
-        f"-a {os.path.abspath('./resources')}"
+        f"-r github.com/openrelayxyz/xplugeth={os.path.abspath('../')} "
+        f"--artifacts-directory={os.path.abspath('./resources')}"
     )
     print(build_command)
-    subprocess.run(build_command, shell=True)
+    result = subprocess.run(build_command, shell=True)
+    if result.returncode != 0:
+        logging.error("build failed")
+        sys.exit(1)
 
-    if os.path.exists(DATADIR):
-        shutil.rmtree(DATADIR)
-    os.makedirs(DATADIR)
-    # if not os.path.exists("./resources/geth"):
-    #     shutil.copy("/tmp/output/geth", "./resources/geth")
-        
-    print(">starting the node")    
+async def start_node():
+    if not os.path.exists(DATADIR):
+       os.makedirs(DATADIR)
+
+    print(">starting the node")   
+    # for the sake of macOs issues in running binaries with partial or invalid signatures i'll need to have this here 
+    subprocess.run(["codesign", "--force", "--deep", "--sign",  "-", "./resources/geth"])  
     process = subprocess.Popen(
         f"./resources/geth --nodiscover --holesky "
         "--http --http.api=eth,admin,plugeth,cardinal "
@@ -68,7 +76,7 @@ def main():
 
     try:
         import_chain()
-        subscribe_to_websocket('test_card_data', 'cardinal')
+        await subscribe_to_websocket('test_card_data', 'plugeth')
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
@@ -77,29 +85,18 @@ def main():
         process.terminate()
         process.wait()
     
+def run_test():
+    logging.info("running test")
     decompress_control_data()
-    # I would like to bring in a testing library. And perform this test in a separate process. 
-    test_cardinal()
+    test_cardinal()  
+    pytest.main(["-q", "--disable-warnings"])  
+    
+def main():
+    build()
+    asyncio.run(start_node())
+    run_test()
     cleanup()
 
 
 if __name__ == '__main__':
     main()
-
-# From my perspective we have several processes within one procedure here:
-# - building the binary to be tested
-# - turning on the node and importing the chain / deleting the binary and data files. 
-# - harvesting the test data (two different ways)
-# - analysing the data for accuracy 
-
-# I think we should separate these out into three different jobs:
-# - building the tag
-# - node operations (including cleanup)
-# - testing the data
-
-# I would organize the functions into those three seperate clusters and then pull them in as necessary in the main function. 
-
-# For the testing I would like to use a testing library. I am familar with pytest. There may be others that are better for
-# this application, I will leave that up to your discretion. 
-
-# please excuse my spelling errors :)

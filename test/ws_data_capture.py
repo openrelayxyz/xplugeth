@@ -44,9 +44,12 @@ async def subscribe_to_websocket(file_name, namespace):
                         await websocket.close()
                         print("WebSocket connection closed.")
                         break
-
+                    
                 except websockets.ConnectionClosed as e:
                     print(f"Websocket closed unexpectedly: {e}")
+                    break
+                except asyncio.CancelledError:
+                    print("WebSocket subscription was cancelled.")
                     break
                 except Exception as e:
                     print(f"Unexpected error: {e}")
