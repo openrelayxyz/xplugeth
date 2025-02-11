@@ -1,5 +1,5 @@
 import os, shutil, subprocess, time, gzip, sys, logging
-import pytest, asyncio
+import pytest, asyncio, json
 from compare_cardinal import test_cardinal
 from ws_data_capture import subscribe_to_websocket
 
@@ -22,8 +22,7 @@ def import_chain():
 
 def decompress_control_data():
     logging.info("decompressing control data")
-    with gzip.open('./resources/v1.14.7.0.5-control-data/p1bu.json.gz', "rb") as f:
-    #with gzip.open('./resources/control_card_data.json.gz', "rb") as f:
+    with gzip.open('./resources/v1.14.7.0.5-control-data/p1cs.json.gz', "rb") as f:
         with open('./resources/control_card_data.json', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
 
@@ -58,6 +57,24 @@ def build():
         logging.error("build failed")
         sys.exit(1)
 
+def get_block_number():
+    try:
+        curl_command = (
+            "curl -s -X POST http://127.0.0.1:8545 "
+            "-H 'Content-Type: application/json' "
+            "--data '{\"jsonrpc\": \"2.0\", \"method\": \"eth_blockNumber\", \"params\": [], \"id\": 1}'"
+        )
+        result =  subprocess.run(curl_command, shell=True, capture_output=True, text=True)
+        if result.returncode == 0:
+            response_data = json.loads(result.stdout)
+            block_number = int(response_data['result'], 16)
+            return block_number
+        else:
+            logging.error(f"failed to get blockNo: {result.stderr}")
+            return None
+    except Exception as e:
+        logging.error(f"error in getting block no: {e}")
+
 async def start_node():
     if not os.path.exists(DATADIR):
        os.makedirs(DATADIR)
@@ -72,16 +89,25 @@ async def start_node():
         f"--datadir={DATADIR}",
         shell=True,
     )
-    time.sleep(5)
+
+    await asyncio.sleep(10)
 
     try:
+        # subscribe_to_websocket('test_plugeth_data', 'plugeth')
         import_chain()
-        await subscribe_to_websocket('test_card_data', 'plugeth')
+        await subscribe_to_websocket('test_card_data', 'cardinal')
+
+        while True:
+            blockno = get_block_number()
+            if blockno and blockno > 2000:
+                logging.info(f"block number {blockno} reached, stopping node")
+                break
+            await asyncio.sleep(10)
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
     finally:
-        time.sleep(2)
+        await asyncio.sleep(2)
         process.terminate()
         process.wait()
     
