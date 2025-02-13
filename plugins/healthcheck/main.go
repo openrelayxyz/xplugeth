@@ -49,22 +49,18 @@ func (h *healthCheckModule) InitializeNode(s *node.Node, b types.Backend) {
 
 	http.HandleFunc("/", h.handleHealthCheck)
 
+	log.Info("healthcheck plugin initialized")
 
-	// go func() {
-	// 	err := http.ListenAndServe(h.port, nil)
-	// 	if err != nil {
-	// 		log.Error("Error starting server", "err", err)
-	// 	}
-	// }()
-	
-	
+	go func() {
+		err := http.ListenAndServe(h.port, nil)
+		if err != nil {
+			log.Error("Error starting server", "err", err)
+		}
+	}()
 }
 
 func (h *healthCheckModule) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
-	log.Error("handle func")
-	w.Header().Set("Content-Type", "application/json")
-
-	// var response map[string]bool
+	var response map[string]bool
 	
 	stat, err := h.getStatus()
 	if err != nil {
@@ -72,42 +68,12 @@ func (h *healthCheckModule) handleHealthCheck(w http.ResponseWriter, r *http.Req
 	}
 
 	if stat {
-		// response = map[string]bool{"ok": true}
-		w.WriteHeader(200)
-		w.Write([]byte(`{"ok": true}\n`))
+		response = map[string]bool{"ok": true}
 	} else {
-		// response = map[string]bool{"ok": false}
-		w.WriteHeader(500)
-		w.Write([]byte(`{"ok": false}\n`))
+		response = map[string]bool{"ok": false}
 	}
 
-	// json.NewEncoder(w).Encode(response)
-
-
-	// hasWarning := false
-	// if tm.shutdown {
-	//   w.WriteHeader(500)
-	//   w.Write([]byte(`{"ok": false}\n`))
-	//   return
-	// }
-	// for _, hc := range tm.healthChecks {
-	//   status := hc.Healthy()
-	//   if status == rpc.Unavailable {
-	// 	w.WriteHeader(500)
-	// 	w.Write([]byte(`{"ok": false}\n`))
-	// 	return
-	//   }
-	//   if status == rpc.Warning {
-	// 	hasWarning = true
-	//   }
-	// }
-	// if hasWarning {
-	//   w.WriteHeader(429)
-	//   w.Write([]byte(`{"ok": false}\n`))
-	//   return
-	// }
-	// w.WriteHeader(200)
-	// w.Write([]byte(`{"ok": true}\n`))
+	json.NewEncoder(w).Encode(response)
   }
 
   func (h *healthCheckModule) getStatus() (bool, error) {
@@ -138,13 +104,6 @@ func (h *healthCheckModule) handleHealthCheck(w http.ResponseWriter, r *http.Req
 
 	return false, nil
 }
-	
-
-  
-
-
-
-
 
 var (
 	_ initialize.Initializer = (*healthCheckModule)(nil)
