@@ -1,6 +1,7 @@
 package example
 
 import (
+	"fmt"
 	"flag"	
 	"time"
 	"encoding/json"
@@ -38,13 +39,13 @@ func (h *healthCheckModule) InitializeNode(s *node.Node, b types.Backend) {
 	h.client = s.Attach()
 
 	h.tolerance = *hcTolerance
-	if h.tolerance == 36 {
-		log.Info("healthcheck tolerance set to default, 36 seconds")
+	if h.tolerance != 36 {
+		log.Info(fmt.Sprintf("healthcheck tolerance set to %v", h.tolerance))
 	}
 
 	h.port = ":"+*hcPort
-	if *hcPort == "9999" {
-		log.Info("healthcheck port set to default, 9999")
+	if *hcPort != "9999" {
+		log.Info(fmt.Sprintf("healthcheck port set to %v", hcPort))
 	}
 
 	http.HandleFunc("/", h.handleHealthCheck)
