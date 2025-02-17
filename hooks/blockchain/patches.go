@@ -7,6 +7,19 @@ import (
 var blockchainPatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
+		Ref: "hooks_foundation_blockchain_v1.15.0_0",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/524852fc1dd7f38c4378f12e1dc9ab6718e773c9
+		Tests: []xplugeth.Test{
+			{
+				Package: "./core",
+				TestNames: []string{
+					"TestCoreInjections",
+				},
+			},
+		},
+	},
+	xplugeth.Patchset{
+		Remote: "github.com/openrelayxyz/xplugeth-patches",
 		Ref: "hooks_foundation_blockchain_v1.14.12_0",
 		// https://github.com/openrelayxyz/xplugeth-patches/commit/b1156a059f9ede71320144f7fbfae525fc60405c
 		Tests: []xplugeth.Test{

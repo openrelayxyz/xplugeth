@@ -130,8 +130,8 @@ if __name__ == "__main__":
     replacements = [replace.split("=") for replace in args.replace]
 
     if args.workdir:
-        main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, args.workdir, replacements)
+        main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, args.workdir, replacements)
     else:
         with tempfile.TemporaryDirectory() as workdir:
-            main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, workdir, replacements)
+            main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, workdir, replacements)
             
