@@ -229,13 +229,6 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 				udpAddr,
 			)
 		}
-		if cfg.Cloudwatchns != "" {
-			go cloudmetrics.Publish(metrics.MajorRegistry,
-				cfg.Cloudwatchns,
-				cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
-				cloudmetrics.Interval(30 * time.Second),
-			)
-		}
 		if cfg.StartBlockOverride > 0 {
 			startBlock = cfg.StartBlockOverride
 		} else {
@@ -462,7 +455,18 @@ func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, dest
 	return weight, updates, deletes, batches, batchUpdates
 }
 
+var publishOnce sync.Once
+
 func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
+	if cfg.Cloudwatchns != "" {
+		publishOnce.Do(func() {
+			go cloudmetrics.Publish(metrics.MajorRegistry,
+				cfg.Cloudwatchns,
+				cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
+				cloudmetrics.Interval(30 * time.Second),
+			)
+		})
+	}
 	if producer == nil {
 		panic("Unknown broker. Please set --cardinal.broker.url")
 	}
