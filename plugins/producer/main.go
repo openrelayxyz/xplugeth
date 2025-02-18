@@ -128,6 +128,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	if cfg.ReceiptTopic == "" { cfg.ReceiptTopic = fmt.Sprintf("%v-receipt", cfg.DefaultTopic) }
 	if cfg.CodeTopic == "" { cfg.CodeTopic = fmt.Sprintf("%v-code", cfg.DefaultTopic) }
 	if cfg.StateTopic == "" { cfg.StateTopic = fmt.Sprintf("%v-state", cfg.DefaultTopic) }
+	if cfg.hcTolerance == 0 { cfg.hcTolerance = 36 }
 	var err error
 	brokers := []transports.ProducerBrokerParams{
 		{
@@ -459,13 +460,17 @@ var publishOnce sync.Once
 
 func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
 	if cfg.Cloudwatchns != "" {
-		publishOnce.Do(func() {
-			go cloudmetrics.Publish(metrics.MajorRegistry,
-				cfg.Cloudwatchns,
-				cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
-				cloudmetrics.Interval(30 * time.Second),
-			)
-		})
+		mark := uint64(time.Now().Unix())
+		blockTime := block.Time()
+		if mark - blockTime <= cfg.hcTolerance {
+				publishOnce.Do(func() {
+				go cloudmetrics.Publish(metrics.MajorRegistry,
+					cfg.Cloudwatchns,
+					cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
+					cloudmetrics.Interval(30 * time.Second),
+				)
+			})
+		}
 	}
 	if producer == nil {
 		panic("Unknown broker. Please set --cardinal.broker.url")

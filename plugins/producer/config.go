@@ -15,5 +15,6 @@ type ProducerConfig struct {
 	Statsdaddr           string `yaml:"statsd.addr"`          // "UDP address for a statsd endpoint"
 	Cloudwatchns         string `yaml:"cloudwatch.namespace"` // "CloudWatch Namespace for cardinal metrics"
 	MinActiveProducers   uint   `yaml:"min.producers"`        // "The minimum number of healthy producers for maintenance operations like state trie flush to take place"
+	hcTolerance 		 uint64    `yaml:"healthcheck.tolerance"`// "tolerance for healthcheck in seconds, default is 36
 }
 
