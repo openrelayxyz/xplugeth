@@ -20,6 +20,7 @@ func GetChainID() (int64, bool) {
 	}
 	var hex hexutil.Uint64
 	client := s.Attach()
+	defer client.Close()
 	client.Call(&hex, "eth_chainId")
 	return int64(hex), true
 }
@@ -32,6 +33,7 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	}
 	var parentBlockJson map[string]json.RawMessage
 	client := s.Attach()
+	defer client.Close()
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
 	raw, ok := parentBlockJson["totalDifficulty"]
 	if !ok {
