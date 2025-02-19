@@ -527,6 +527,7 @@ type cardinalAPI struct {
 
 func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNumber) (bool, error) {
 	client := api.stack.Attach()
+	defer client.Close()
 	
 	var currentBlock int64
 	client.Call(&currentBlock, "eth_blockNumber")
