@@ -39,7 +39,7 @@ async def subscribe_to_websocket(file_name, namespace):
 
                     if len(output) >= 1999:
                         print(f"writing to output file {output_file}.json")
-                        with open(f'{output_file}.json', 'w') as f:
+                        with open(f'./resources/{output_file}.json', 'w') as f:
                             json.dump(output, f)
                         await websocket.close()
                         print("WebSocket connection closed.")

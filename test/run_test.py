@@ -3,7 +3,6 @@ import os, shutil, subprocess, time, gzip, sys, logging, threading
 import pytest, asyncio, json, signal, requests
 
 from compare_cardinal import test_cardinal
-from ws_data_capture import subscribe_to_websocket
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
@@ -34,23 +33,28 @@ def decompress_control_data():
         with open('./resources/control_card_data.json', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
 
+    with gzip.open('./resources/v1.14.7.0.5-control-data/p1bu.json.gz', "rb") as f:
+        with open('./resources/control_plugeth_data.json', "wb") as f_o:
+            shutil.copyfileobj(f, f_o)
+
 def cleanup():
     logging.info("cleanup")
-    if os.path.exists("./test_card_data.json"):
-        os.remove("./test_card_data.json")
-    
-    if os.path.exists("./resources/geth"):
-        os.remove("./resources/geth")
+
+    files_to_remove = [
+        './resources/test_card_data.json',
+        './resources/test_plugeth_data.json',
+        # './resources/geth', 
+        './resources/control_card_data.json',
+        './resources/control_plugeth_data.json'
+    ]
+
+    for path in files_to_remove:
+        if os.path.exists(path):
+            os.remove(path)
 
     if os.path.exists(DATADIR):
         shutil.rmtree(DATADIR)
     
-    with open("./resources/control_card_data.json", "rb") as f:
-        with gzip.open('./resources/v1.14.7.0.5-control-data/p1cs.json.gz', "wb") as f_o:
-            shutil.copyfileobj(f, f_o)
-
-    if os.path.exists("./resources/control_card_data.json"):
-        os.remove("./resources/control_card_data.json")
   
 def build():
     logging.info("building geth")
@@ -83,8 +87,8 @@ def start_node():
        os.makedirs(DATADIR)
 
     print(">starting the node")   
-    # for the sake of macOs issues in running binaries with partial or invalid signatures i'll need to have this here 
-    subprocess.run(["codesign", "--force", "--deep", "--sign",  "-", "./resources/geth"])  
+    # for the sake of macOs issues (Sequioa 15.0 or below) in running binaries with partial or invalid signatures i'll need to have this here 
+    # subprocess.run(["codesign", "--force", "--deep", "--sign",  "-", "./resources/geth"])  
 
     global geth 
     geth = subprocess.Popen(
@@ -99,8 +103,12 @@ def start_node():
     time.sleep(5)
 
     try:
-        # subscribe_to_websocket('test_plugeth_data', 'plugeth')
+        subprocess.Popen(["python3", "ws_data_capture.py", "test_plugeth_data", "plugeth"])
+        time.sleep(2)
         import_chain()
+        time.sleep(2)
+        subprocess.Popen(["python3", "ws_data_capture.py", "test_card_data", "cardinal"])
+
     except Exception as e:
         logging.error(f"An error occurred: {e}")
         sys.exit(1)
@@ -108,13 +116,12 @@ def start_node():
     return geth
 
     
-async def monitor_node():
+def monitor_node():
     time.sleep(10)
                
     while True:
         blockno = get_block_number()
         if blockno and blockno >= 2000:
-            await subscribe_to_websocket('test_card_data', 'cardinal')
             logging.info(f"block number {blockno} reached, stopping node")
             if geth:
                 geth.send_signal(signal.SIGINT)
@@ -131,9 +138,9 @@ def run_test():
 def main():
     build()
 
-    node_thread = threading.Thread(target=start_node)
+    node_thread = threading.Thread(target=monitor_node)
     
-    monitor_thread =  threading.Thread(target=lambda: asyncio.run(monitor_node()))
+    monitor_thread = threading.Thread(target=start_node)
 
     node_thread.start()
     monitor_thread.start()
@@ -146,4 +153,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+   main()
