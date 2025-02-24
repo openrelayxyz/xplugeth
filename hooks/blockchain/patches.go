@@ -7,8 +7,8 @@ import (
 var blockchainPatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_blockchain_v1.15.0_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/524852fc1dd7f38c4378f12e1dc9ab6718e773c9
+		Ref: "hooks_foundation_blockchain_v1.15.0_1",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/20867e93eb9f48d18e22c47b8e36bd545b9763cb
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core",
