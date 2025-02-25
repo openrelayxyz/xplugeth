@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"encoding/json"
 	"errors"
 	"math/big"
@@ -19,11 +20,12 @@ func GetChainID() (int64, bool) {
 	}
 	var hex hexutil.Uint64
 	client := s.Attach()
+	defer client.Close()
 	client.Call(&hex, "eth_chainId")
 	return int64(hex), true
 }
 
-func GetTd(hash common.Hash, id int64) (*big.Int, error) {
+func GetTd(hash common.Hash) (*big.Int, error) {
 	result := new(big.Int)
 	s, ok := xplugeth.GetSingleton[*node.Node]()
 	if !ok {
@@ -31,13 +33,20 @@ func GetTd(hash common.Hash, id int64) (*big.Int, error) {
 	}
 	var parentBlockJson map[string]json.RawMessage
 	client := s.Attach()
+	defer client.Close()
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
 	raw, ok := parentBlockJson["totalDifficulty"]
 	if !ok {
-		if id == int64(1) {
+		chainid, ok := GetChainID()
+		if !ok { panic(fmt.Sprintf("could not resolve chain id from within GetTd")) }
+		switch chainid {
+		case int64(1):
 			result.SetString("58750003716598352816469", 10)
+		case int64(11155111):
+			result.SetString("17000018015853232", 10)
+		default:
+			result.SetString("1", 10)
 		}
-		result.SetString("1", 10)
 		return result, nil
 	}
 	var td string

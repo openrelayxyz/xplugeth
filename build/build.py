@@ -114,7 +114,7 @@ if __name__ == "__main__":
                     prog='xplugeth',
                     description='Build extended Geth binaries')
     parser.add_argument('-s', '--source-remote', default="https://github.com/ethereum/go-ethereum") 
-    parser.add_argument('-t', '--source-tag', default="v1.14.12")
+    parser.add_argument('-t', '--source-tag', default="v1.14.13")
     parser.add_argument('-p', '--plugin', action="append", default=[])
     parser.add_argument('-r', '--replace', action="append", default=[])
     parser.add_argument('-c', '--cmd', default="./cmd/geth")
@@ -130,8 +130,8 @@ if __name__ == "__main__":
     replacements = [replace.split("=") for replace in args.replace]
 
     if args.workdir:
-        main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, args.workdir, replacements)
+        main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, args.workdir, replacements)
     else:
         with tempfile.TemporaryDirectory() as workdir:
-            main(args.source_remote, args.source_tag, args.plugin, args.cmd, args.artifacts_directory, workdir, replacements)
+            main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, workdir, replacements)
             
