@@ -66,7 +66,7 @@ def get_block_number():
         logging.error(f"error in getting block no: {e}")
         return None
 
-def start_node():
+def start_node(path_to_bin):
     logging.info("starting geth")
     if not os.path.exists(DATADIR):
        os.makedirs(DATADIR)
@@ -76,7 +76,7 @@ def start_node():
 
     global geth 
     geth = subprocess.Popen([
-        f"./geth",
+        f"{path_to_bin}",
         "--nodiscover",
         "--holesky",
         "--http",
@@ -120,9 +120,9 @@ def monitor_node():
             break
         time.sleep(7)
 
-def gather_data():
+def gather_data(binary_path):
     logging.info("Gathering data")
-    node_thread = threading.Thread(target=start_node)
+    node_thread = threading.Thread(target=start_node, args=(binary_path,))
     monitor_thread = threading.Thread(target=monitor_node)
     
     node_thread.start()
@@ -130,10 +130,10 @@ def gather_data():
 
     node_thread.join()
     monitor_thread.join()
-    
-def test_main():
 
-    gather_data()
+def test_main(bin_path):
+
+    gather_data(bin_path)
 
     decompress_control_data()
 
@@ -145,4 +145,4 @@ def test_main():
 
 
 if __name__ == '__main__':
-   test_main()
+   test_main(sys.argv[1])
