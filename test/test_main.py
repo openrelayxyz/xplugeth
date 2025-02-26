@@ -76,7 +76,7 @@ def start_node():
 
     global geth 
     geth = subprocess.Popen([
-        f"/tmp/output/geth",
+        f"./geth",
         "--nodiscover",
         "--holesky",
         "--http",
