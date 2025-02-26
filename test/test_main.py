@@ -2,7 +2,7 @@
 import os, shutil, subprocess, time, gzip, sys, logging, threading
 import pytest, asyncio, json, signal, requests
 
-from compare_cardinal import test_cardinal
+from compare_results import check_blockupdates_values, check_cardinal_values
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
@@ -25,14 +25,16 @@ def import_chain():
                     sys.exit(1)
         except Exception as e:
             logging.error(f"Failed to import chain: {e}")
+            raise
             sys.exit(1)
         
 def decompress_control_data():
-    logging.info("decompressing control data")
+    logging.info("decompressing control cardinal data")
     with gzip.open('./resources/v1.14.7.0.5-control-data/p1cs.json.gz', "rb") as f:
         with open('./resources/control_card_data.json', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
 
+    logging.info("decompressing control plugeth data")
     with gzip.open('./resources/v1.14.7.0.5-control-data/p1bu.json.gz', "rb") as f:
         with open('./resources/control_plugeth_data.json', "wb") as f_o:
             shutil.copyfileobj(f, f_o)
@@ -43,7 +45,6 @@ def cleanup():
     files_to_remove = [
         './resources/test_card_data.json',
         './resources/test_plugeth_data.json',
-        # './resources/geth', 
         './resources/control_card_data.json',
         './resources/control_plugeth_data.json'
     ]
@@ -54,23 +55,6 @@ def cleanup():
 
     if os.path.exists(DATADIR):
         shutil.rmtree(DATADIR)
-    
-  
-def build():
-    logging.info("building geth")
-    build_path = os.path.abspath('../build/build.py')
-    build_command = (
-        f"python3 {build_path} "
-        "-s https://github.com/ethereum/go-ethereum "
-        "-p github.com/openrelayxyz/xplugeth/plugins/merge@v0.12.0 "
-        f"-r github.com/openrelayxyz/xplugeth={os.path.abspath('../')} "
-        f"--artifacts-directory={os.path.abspath('./resources')}"
-    )
-    print(build_command)
-    result = subprocess.run(build_command, shell=True)
-    if result.returncode != 0:
-        logging.error("build failed")
-        sys.exit(1)
 
 def get_block_number():
     time.sleep(5)
@@ -83,22 +67,24 @@ def get_block_number():
         return None
 
 def start_node():
+    logging.info("starting geth")
     if not os.path.exists(DATADIR):
        os.makedirs(DATADIR)
 
-    print(">starting the node")   
     # for the sake of macOs issues (Sequioa 15.0 or below) in running binaries with partial or invalid signatures i'll need to have this here 
     # subprocess.run(["codesign", "--force", "--deep", "--sign",  "-", "./resources/geth"])  
 
     global geth 
-    geth = subprocess.Popen(
-        f"./resources/geth --nodiscover --holesky "
-        "--http --http.api=eth,admin,plugeth,cardinal "
-        "--ws --ws.api=cardinal,plugeth "
-        "--verbosity=0 "
-        f"--datadir={DATADIR}",
-        shell=True,
-    )
+    geth = subprocess.Popen([
+        f"/tmp/output/geth",
+        "--nodiscover",
+        "--holesky",
+        "--http",
+        "--http.api=eth,admin,plugeth,cardinal",
+        "--ws",
+        "--ws.api=cardinal,plugeth",
+        "--verbosity=0",
+        f"--datadir={DATADIR}"])
 
     time.sleep(5)
 
@@ -111,9 +97,14 @@ def start_node():
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
+        terminate_geth()
+        raise
         sys.exit(1)
 
-    return geth
+def terminate_geth():
+    if geth:
+        geth.terminate()
+        geth.wait()
 
     
 def monitor_node():
@@ -123,34 +114,35 @@ def monitor_node():
         blockno = get_block_number()
         if blockno and blockno >= 2000:
             logging.info(f"block number {blockno} reached, stopping node")
-            if geth:
-                geth.send_signal(signal.SIGINT)
+            time.sleep(5)
+            terminate_geth()
             time.sleep(5)
             break
         time.sleep(7)
-            
-def run_test():
-    logging.info("running test")
-    decompress_control_data()
-    test_cardinal()  
-    pytest.main(["-q", "--disable-warnings"])  
-    
-def main():
-    build()
 
-    node_thread = threading.Thread(target=monitor_node)
+def gather_data():
+    logging.info("Gathering data")
+    node_thread = threading.Thread(target=start_node)
+    monitor_thread = threading.Thread(target=monitor_node)
     
-    monitor_thread = threading.Thread(target=start_node)
-
     node_thread.start()
     monitor_thread.start()
 
     node_thread.join()
     monitor_thread.join()
+    
+def test_main():
 
-    run_test()
+    gather_data()
+
+    decompress_control_data()
+
+    check_blockupdates_values()
+
+    check_cardinal_values()
+    
     cleanup()
 
 
 if __name__ == '__main__':
-   main()
+   test_main()
