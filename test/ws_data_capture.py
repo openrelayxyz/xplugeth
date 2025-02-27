@@ -1,8 +1,6 @@
-import asyncio
-import websockets
-import json
-import sys
+import asyncio, logging, websockets, json, sys
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
 async def subscribe_to_websocket(file_name, namespace):
     output = []
@@ -14,6 +12,7 @@ async def subscribe_to_websocket(file_name, namespace):
     try:
         async with websockets.connect(ws_url) as websocket:
             if namespace == "cardinal":
+                logging.info("gathering cardinal streams data")
                 for i in range(0, 2000):
                     req = json.dumps({
                         "jsonrpc": "2.0",
@@ -23,6 +22,7 @@ async def subscribe_to_websocket(file_name, namespace):
                     })
                     await websocket.send(req)
             else:
+                logging.info("gathering plugeth blockupdates data")
                 req = json.dumps({
                     "jsonrpc": "2.0",
                     "method": "plugeth_subscribe",
@@ -38,25 +38,24 @@ async def subscribe_to_websocket(file_name, namespace):
                     output.append(json.loads(response))
 
                     if len(output) >= 1999:
-                        print(f"writing to output file {output_file}.json")
+                        logging.info(f"writing to output file {output_file}.json")
                         with open(f'./resources/{output_file}.json', 'w') as f:
                             json.dump(output, f)
                         await websocket.close()
-                        print("WebSocket connection closed.")
+                        logging.info("WebSocket connection closed.")
                         break
                     
                 except websockets.ConnectionClosed as e:
-                    print(f"Websocket closed unexpectedly: {e}")
+                    logging.error(f"Websocket closed unexpectedly: {e}")
                     break
                 except asyncio.CancelledError:
-                    print("WebSocket subscription was cancelled.")
+                    logging.error("WebSocket subscription was cancelled.")
                     break
                 except Exception as e:
-                    print(f"Unexpected error: {e}")
+                    logging.error(f"Unexpected error: {e}")
                     break
     except Exception as e:
-        print(f"failed to connect to websocket {e}")
+        logging.Error(f"failed to connect to websocket {e}")
         
-
 if __name__ == "__main__":
     asyncio.run(subscribe_to_websocket(sys.argv[1], sys.argv[2]))

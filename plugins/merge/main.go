@@ -58,6 +58,7 @@ func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
 
 func getSafeFinalized() (*big.Int, *big.Int) {
 	client := stack.Attach()
+	defer client.Close()
 	var snl, fnl numLookup
 	if err := client.Call(&snl, "eth_getBlockByNumber", "safe", false); err != nil {
 		log.Warn("Could not get safe block", "err", err)
