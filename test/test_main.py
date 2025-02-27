@@ -26,7 +26,6 @@ def import_chain():
         except Exception as e:
             logging.error(f"Failed to import chain: {e}")
             raise
-            sys.exit(1)
         
 def decompress_control_data():
     logging.info("decompressing control cardinal data")
@@ -70,9 +69,6 @@ def start_node(path_to_bin):
     logging.info("starting geth")
     if not os.path.exists(DATADIR):
        os.makedirs(DATADIR)
-
-    # for the sake of macOs issues (Sequioa 15.0 or below) in running binaries with partial or invalid signatures i'll need to have this here 
-    # subprocess.run(["codesign", "--force", "--deep", "--sign",  "-", "./resources/geth"])  
 
     global geth 
     geth = subprocess.Popen([
