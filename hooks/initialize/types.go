@@ -19,7 +19,7 @@ type Initializer interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[Initializer]()
+	xplugeth.RegisterHook[Initializer](initializePatchsets...)
 	xplugeth.RegisterHook[Shutdown]()
 	xplugeth.RegisterHook[Blockchain]()
 }

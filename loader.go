@@ -1,6 +1,7 @@
 package xplugeth
 
 import (
+	"flag"
 	"path"
 	"path/filepath"
 	"strings"
@@ -16,17 +17,25 @@ import (
 var configPath string
 
 type pluginLoader struct {
+	initialized bool
 	modules []reflect.Type
 	hookInterfaces []reflect.Type
 	hooks map[reflect.Type][]any
 	moduleValues []reflect.Value
 	names map[string]reflect.Type
-
+	patchsets map[reflect.Type][]Patchset
 	singletons map[reflect.Type]any
+	subCommands map[string]func([]string)error
+	flags []flag.FlagSet
+	providedSubCommand string
+	providedSCArgs []string
 }
 
-func (pl *pluginLoader) registerHook(t reflect.Type) {
+func (pl *pluginLoader) registerHook(t reflect.Type, p ...Patchset) {
 	pl.hookInterfaces = append(pl.hookInterfaces, t)
+	if len(p) > 0 {
+		pl.patchsets[t] = p
+	}
 }
 
 func (pl *pluginLoader) registerModule(t reflect.Type, name string) {
@@ -38,7 +47,18 @@ func (pl *pluginLoader) registerModule(t reflect.Type, name string) {
 	pl.names[name] = t
 }
 
+func (pl *pluginLoader) registerSubCommands(provided map[string]func([]string)error) {
+	for name, f := range provided {
+		pl.subCommands[name] = f
+	}
+}
+
+func (pl *pluginLoader) registerFlags(provided flag.FlagSet) {
+	pl.flags = append(pl.flags, provided)
+}
+
 func (pl *pluginLoader) initialize(dirpath string) {
+	pl.initialized = true
 	pl.hooks = make(map[reflect.Type][]any)
 	for _, mt := range pl.modules {
 		mv := reflect.New(mt)
@@ -84,6 +104,83 @@ func (pl *pluginLoader) hasModule(name string) bool {
 	return ok
 }
 
+func (pl *pluginLoader) parseCommands(commands []string) (int,bool) {
+	var i int
+	var ok bool
+	if pl.initialized {
+		if i, ok = pl.hasSubcommand(commands); ok {
+			pl.hasFlag(commands)
+			return i, ok
+		}
+		if i, ok = pl.hasFlag(commands); ok {
+			return i, ok
+		}
+	}
+	return 0, false
+}
+
+func (pl *pluginLoader) hasSubcommand(commands []string) (int, bool) {
+	if commands == nil || len(commands) == 0 {
+		return 0, false
+	}
+	for i, name := range commands {
+		if _, ok := pl.subCommands[name]; ok {
+			pl.providedSubCommand = name
+			pl.providedSCArgs = commands[i:]
+			return i, true
+		}	 
+	}
+	return 0, false
+}
+
+func (pl *pluginLoader) hasFlag(args []string) (int, bool) {
+	if args == nil || len(args) == 0 {
+		return 0, false
+	}
+
+	masterFlagSet := *flag.NewFlagSet("master-plugin-flagset", flag.ContinueOnError)
+	for _, flagset := range pl.flags {
+		flagset.VisitAll(func(f *flag.Flag) {
+			masterFlagSet.Var(f.Value, f.Name, f.Usage)
+		})
+	}
+
+	flagArgs := make([]string, len(args))
+	prefix := "--"
+	for i, arg := range args {
+		if strings.HasPrefix(arg, prefix) {
+			flagArgs[i] = arg
+		}
+	}
+
+	var idx int 
+	var present bool
+	for i, arg := range flagArgs {
+		argName := strings.TrimPrefix(arg, "--")
+		if eqIdx := strings.Index(argName, "="); eqIdx != -1 {
+			argName = argName[:eqIdx] 
+		}
+		if p := masterFlagSet.Lookup(argName); p != nil {
+			idx = i
+			present = true
+			if err := masterFlagSet.Parse(args[i:]); err != nil {
+				log.Error("error parsing flags, xplugeth flags should be positioned after all geth flags", "err", err)
+				return 0, false
+			}
+			return idx, present
+		}
+	}
+	return idx, present
+}
+
+func (pl *pluginLoader) runSubcommand() (bool, error) {
+	if pl.providedSubCommand == "" {
+		return false, nil
+	} else {
+		return true, pl.subCommands[pl.providedSubCommand](pl.providedSCArgs)
+	}
+} 
+
 var pl *pluginLoader
 
 func init() {
@@ -92,6 +189,9 @@ func init() {
 		hookInterfaces: []reflect.Type{},
 		hooks: make(map[reflect.Type][]any),
 		singletons: make(map[reflect.Type]any),
+		patchsets: make(map[reflect.Type][]Patchset),
+		subCommands: make(map[string]func([]string)error),
+		flags: make([]flag.FlagSet, 0),
 	}
 }
 
@@ -99,8 +199,16 @@ func RegisterModule[t any](name string) {
 	pl.registerModule(reflect.TypeFor[t](), name)
 }
 
-func RegisterHook[t any]() {
-	pl.registerHook(reflect.TypeFor[t]())
+func RegisterSubCommands(funcs map[string]func([]string)error) {
+		pl.registerSubCommands(funcs)
+}
+
+func RegisterFlags(flags flag.FlagSet) {
+		pl.registerFlags(flags)
+}
+
+func RegisterHook[t any](p ...Patchset) {
+	pl.registerHook(reflect.TypeFor[t](), p...)
 }
 
 func Initialize(dirpath string) {
@@ -135,6 +243,14 @@ func GetSingleton[t any]() (t, bool) {
 
 func HasModule(name string) bool {
 	return pl.hasModule(name)
+}
+
+func ParseCommands(commands []string) (int,bool) {
+	return pl.parseCommands(commands)
+}
+
+func RunSubcommand() (bool, error) {
+	return pl.runSubcommand()
 }
 
 func GetConfig[T any](name string) (*T, bool) {
@@ -176,4 +292,12 @@ func GetConfig[T any](name string) (*T, bool) {
 	}
 
 	return c, true
+}
+
+func GetPatchsets() [][]Patchset {
+	res := make([][]Patchset, 0, len(pl.patchsets))
+	for _, patchsets := range pl.patchsets {
+		res = append(res, patchsets)
+	}
+	return res
 }

@@ -7,14 +7,14 @@ import (
 )
 
 type PreTrieCommit interface {
-	PreTrieCommit(node common.Hash)
+	PreTrieCommit(common.Hash)
 }
 
 type PostTrieCommit interface {
-	PostTrieCommit(node common.Hash)
+	PostTrieCommit(common.Hash)
 }
 
 func init() {
-	xplugeth.RegisterHook[PreTrieCommit]()
+	xplugeth.RegisterHook[PreTrieCommit](triecommitPatchsets...)
 	xplugeth.RegisterHook[PostTrieCommit]()
 }

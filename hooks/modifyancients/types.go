@@ -11,5 +11,5 @@ type ModifyAncientsPlugin interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[ModifyAncientsPlugin]()
+	xplugeth.RegisterHook[ModifyAncientsPlugin](modifyancientsPatchsets...)
 }
