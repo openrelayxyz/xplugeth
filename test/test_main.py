@@ -139,6 +139,9 @@ def test_main(bin_path):
     
     cleanup()
 
+# pytest --bin-path=/path/to/binary if being run with pytest 
+# python3 test_main.py /path/to/binary for debugging
+
 
 if __name__ == '__main__':
    test_main(sys.argv[1])
