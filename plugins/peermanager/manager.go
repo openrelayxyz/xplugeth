@@ -1,10 +1,10 @@
 package peermanager
 
 import (
-	"fmt"
-	"net/http"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -64,9 +64,11 @@ func analyzeEnode(raw string) string {
 	port := secondPass[1]
 
 	if ip == "127.0.0.1" {
-		if publicIP := getPublicIP(); publicIP != "" { ip = publicIP } 
+		if publicIP := getPublicIP(); publicIP != "" {
+			ip = publicIP
+		}
 	}
-	
+
 	return nodeId + "@" + ip + ":" + port
 }
 
@@ -84,11 +86,11 @@ func getPublicIP() string {
 		return ""
 	}
 
-	var myip myIp 
+	var myip myIp
 	if err := json.Unmarshal(raw, &myip); err != nil {
 		log.Error("error unmarshaling myip json, peer manager, retrying", "err", err)
 		return ""
-	} 
+	}
 
 	return myip.IP
 }
