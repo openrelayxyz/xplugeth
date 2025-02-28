@@ -361,13 +361,10 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 	}
 	data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 	if err != nil { 
-		log.Error("this is error zero", "err", err)
 		return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())
 	}
-	log.Error("its the second one")
 	su := &stateUpdate{}
 	if err := rlp.DecodeBytes(data, su); err != nil { 
-		log.Error("this is error one", "err", err)
 		return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) 
 	}
 	result["stateUpdates"] = su

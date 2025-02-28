@@ -58,6 +58,7 @@ func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
 
 func getSafeFinalized() (*big.Int, *big.Int) {
 	client := stack.Attach()
+	defer client.Close()
 	var snl, fnl numLookup
 	if err := client.Call(&snl, "eth_getBlockByNumber", "safe", false); err != nil {
 		log.Warn("Could not get safe block", "err", err)
@@ -69,16 +70,7 @@ func getSafeFinalized() (*big.Int, *big.Int) {
 }
 
 func (*mergePlugin) CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
-	if !postMerge {
-		v, _ := backend.ChainDb().Get([]byte("eth2-transition"))
-		if len(v) > 0 {
-			postMerge = true
-		} else {
-			// Not yet post merge, we don't want to make any modifications
-			gethWeightGauge.Update(new(big.Int).Div(weight, big.NewInt(10000000000000000)).Int64())
-			return
-		}
-	}
+	
 	snum, fnum := getSafeFinalized()
 	if snum != nil {
 		updates[fmt.Sprintf("c/%x/n/safe", chainid)] = snum.Bytes()
