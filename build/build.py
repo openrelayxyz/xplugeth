@@ -68,18 +68,21 @@ def apply_patch(patch):
             print(go.test(test["package"], "-run", testName))
 
 def parse_source(remote):
-    if remote == 'https://github.com/ethereum/go-ethereum':
+    if remote.lower().strip("/") == 'https://github.com/ethereum/go-ethereum':
         return 'foundation'
-    elif remote == 'https://github.com/maticnetwork/bor/':
+    elif remote.lower().strip("/") == 'https://github.com/maticnetwork/bor/':
         return 'bor'
-    elif remote == 'https://github.com/etclabscore/core-geth':
+    elif remote.lower().strip("/") == 'https://github.com/etclabscore/core-geth':
         return 'etc'
     else:
-        return 'unknown'
+        return remote.split("/")[-1]
 
 
 def push_to_archive(archive, remote, tag, xplugeth_tag, xplugeth_branch):
-    git.remote.add("archive", archive)
+    try:
+        git.remote.add("archive", archive)
+    except Exception as e:
+        print(f"encountered an exception adding archive remote: {e}")
 
     source = parse_source(remote)
     branch = xplugeth_tag + "-" + xplugeth_branch + "-" + source + "-" + tag
@@ -132,7 +135,7 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements, 
             try:
                 push_to_archive(archive, remote, tag, xp_tag, xp_branch)
             except Exception as e:
-                print("error pushing to archive remote: {e}")
+                print(f"error pushing to archive remote: {e}")
         os.chdir(orig)
 
 
