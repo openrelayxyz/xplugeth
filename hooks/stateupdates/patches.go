@@ -7,8 +7,8 @@ import (
 var stateupdatesPatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_stateupdates_v1.15.0_2",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/8bf60ed0624851d21b94fb67c2ddec4a7ff56d91
+		Ref: "hooks_foundation_stateupdates_v1.15.6_0",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/ef36f13af76f2c90b493330af509ed412b2b3342
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core/state",
@@ -20,8 +20,8 @@ var stateupdatesPatchsets = []xplugeth.Patchset {
 	},
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_stateupdates_v1.14.11_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/49b20e469b3702109e01d7480c1ae757941823c6
+		Ref: "hooks_etc_stateupdates_v1.12.20_2",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/eb66450d205ecd961cb9db113f25e2b5769ddfdb
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core/state",
@@ -33,21 +33,8 @@ var stateupdatesPatchsets = []xplugeth.Patchset {
 	},
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_etc_stateupdates_v1.12.20_1",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/67720ccd8d0d3c03992585ea359761622732eb75
-		Tests: []xplugeth.Test{
-			{
-				Package: "./core/state",
-				TestNames: []string{
-					"TestStateInjections",
-				},
-			},
-		},
-	},
-	xplugeth.Patchset{
-		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_bor_stateupdates_v1.5.2_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/edc23fd698afc8edf68e2636da3b41de37fa4739
+		Ref: "hooks_bor_stateupdates_v1.5.2_2",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/ab3ea05e2f72c9daec8bcbd062185127a36a8793
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core/state",
