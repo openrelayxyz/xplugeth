@@ -33,8 +33,8 @@ var stateupdatesPatchsets = []xplugeth.Patchset {
 	},
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_bor_stateupdates_v1.5.2_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/edc23fd698afc8edf68e2636da3b41de37fa4739
+		Ref: "hooks_bor_stateupdates_v1.5.2_1",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/526929f32cc771fbb8a4640477ce6e6319f909df
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core/state",
