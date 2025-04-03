@@ -4,23 +4,21 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	ctypes "github.com/openrelayxyz/cardinal-types"
 	"github.com/openrelayxyz/cardinal-types/metrics"
 
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/initialize"
+	"github.com/openrelayxyz/xplugeth/plugins/producer"
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
-	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 )
 
 // by importing the cardinal plugin below create an import chain which enables us to only require importing this plugin into geth
-import (
-	"github.com/openrelayxyz/xplugeth/plugins/producer"
-)
 
 type mergePlugin struct{}
 type cardinalHook struct{}
