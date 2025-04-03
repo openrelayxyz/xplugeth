@@ -20,7 +20,7 @@ import (
 // by importing the cardinal plugin below create an import chain which enables us to only require importing this plugin into geth
 import (
 	"github.com/openrelayxyz/xplugeth/plugins/producer"
-	"github.com/openrelayxyz/xplugeth/plugins/peermanager"
+	_ "github.com/openrelayxyz/xplugeth/plugins/peermanager"
 )
 
 type mergePlugin struct{}
