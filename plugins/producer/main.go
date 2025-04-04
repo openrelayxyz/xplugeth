@@ -37,6 +37,7 @@ import (
 // the imports below are bringing in other plugins which have to be present for the producer to function properly
 import (
 	"github.com/openrelayxyz/xplugeth/plugins/blockupdates"
+	_ "github.com/openrelayxyz/xplugeth/plugins/peermanager"
 )
 
 type cardinalProducerModule struct {
@@ -104,7 +105,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	if !ok {
 		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, producer"))
 	}
-	
+
 	for _, updater := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
 		blockUpdatesByNumber = updater.BlockUpdatesByNumber
 	}

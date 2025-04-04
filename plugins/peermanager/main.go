@@ -53,9 +53,7 @@ func (*peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
 	if !ok {
 		cfg = &peerManagerConfig{}
-		if cfg.BrokerURL == "" { cfg.BrokerURL = fmt.Sprintf("peermanager-%v", chainid) }
-		if cfg.PeerTopic == "" { cfg.PeerTopic = fmt.Sprintf(chainIdResolver(chainid)) }
-		log.Warn("did not acqire config, example plugin, all values set to default")
+		log.Warn("did not acqire config, peermanager plugin, all values set to default")
 	}
 	peerBroker = cfg.BrokerURL
 	peerTopic  = cfg.PeerTopic
@@ -67,7 +65,10 @@ func (*peerManagerModule) Blockchain() {
 	if sessionPeerService == nil {
 		panic(fmt.Sprintf("peer manager is nil, peer manager plugin"))
 	}
-	go peeringSequence()
+
+	if cfg.BrokerURL != "" {
+		go peeringSequence()
+	}
 }
 
 func peeringSequence() {
