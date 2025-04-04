@@ -272,9 +272,6 @@ func GetConfig[T any](name string) (*T, bool) {
 			} else {
 				fpath = path.Join(configPath, file.Name())
 			}
-		} else {
-			log.Warn("plugin config file does not exist")
-			continue
 		}
 	}	
 
