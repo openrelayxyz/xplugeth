@@ -67,6 +67,7 @@ func (*peerManagerModule) Blockchain() {
 	}
 
 	if cfg.BrokerURL != "" {
+		log.Error("broker not nil", "broker", cfg.BrokerURL)
 		go peeringSequence()
 	}
 }
