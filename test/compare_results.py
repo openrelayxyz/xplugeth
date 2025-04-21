@@ -33,6 +33,7 @@ def check_blockupdates_values():
                     f"Mismatch at outer dict blockupdates: index {i}, key '{k}'. "
                     f"Expected {v}, got {test_plugeth[i]['params']['result'][k]}"
             )
+    print("all clear no plugeth problems")
 
 
 def check_cardinal_values():
@@ -60,3 +61,4 @@ def check_cardinal_values():
                     f"Mismatch at outer dict cardinal: index {i}, key '{k}'. "
                     f"Expected {v}, got {test_card[i]['result']['batch'][k]}"
             )
+    print("all clear no cardinal problems")
