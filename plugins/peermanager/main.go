@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+	"encoding/json"
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
@@ -25,6 +26,10 @@ import (
 type peerManagerConfig struct {
 	BrokerURL string `yaml:"broker.url"`
 	PeerTopic string `yaml:"peer.topic"`
+}
+
+type peerBroadcast struct {
+	Generic []string `json:"generic"`
 }
 
 type PeerMetrics struct {
@@ -41,6 +46,7 @@ var (
 	maxPeers   int
 
 	sessionPeerService *PeerManager
+	activeModule       *peerManagerModule 
 	chainid            int64
 	brokers            []string
 	config             *sarama.Config
@@ -70,6 +76,7 @@ func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 	sessionPeerService = &PeerManager{
 		client: s.Attach(),
 	}
+	activeModule = p
 
 	var ok bool
 
@@ -97,14 +104,14 @@ func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 	log.Info("Initialized node, peer manager plugin")
 }
 
-func (*peerManagerModule) Blockchain() {
+func (p *peerManagerModule) Blockchain() {
 	if sessionPeerService == nil {
 		panic(fmt.Sprintf("peer manager is nil, peer manager plugin"))
 	}
-	go peeringSequence()
+	go p.peeringSequence()
 }
 
-func peeringSequence() {
+func (p *peerManagerModule) peeringSequence() {
 
 	selfNode, err := sessionPeerService.getEnode()
 	if err != nil {
@@ -123,9 +130,19 @@ func peeringSequence() {
 		return
 	}
 
+	payload := peerBroadcast{
+		Generic: p.getHealthyPeers(),
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Error("failed to marshal peer payload", "err", err)
+		return
+	}
+
 	msg := &sarama.ProducerMessage{
 		Topic: peerTopic,
-		Value: sarama.StringEncoder(selfNode),
+		Value: sarama.ByteEncoder(data),
 	}
 
 	producer.Input() <- msg
@@ -141,6 +158,14 @@ func peeringSequence() {
 			continue
 		} else {
 			sessionPeerService.attachPeers(message)
+		}
+	}
+
+	for _, m := range payload.Generic{
+		if m == selfNode{
+			continue
+		} else {
+			sessionPeerService.attachGenericPeers(m)
 		}
 	}
 }
@@ -244,6 +269,7 @@ func (p *peerManagerModule) updatePeerConnections() {
 		return
 	}
 
+	// performance ration based of block contributions and connection duration
 	peerRatios := make(map[string]float64)
 	var peersToDrop []string
 
@@ -260,6 +286,7 @@ func (p *peerManagerModule) updatePeerConnections() {
 		return
 	}
 
+	// sorts and removes bottom 10 
 	dropCount := int(float64(len(peerRatios)) * 0.1)
 	if dropCount > 0 {
 		peers := make([]string, 0, len(peerRatios))
@@ -273,7 +300,19 @@ func (p *peerManagerModule) updatePeerConnections() {
 		p.removePeers(peersToDrop)
 
 	}
+}
 
+func (p *peerManagerModule) getHealthyPeers() []string{
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	var healthy []string
+	for enode, metrics := range p.peerMetricsMap {
+		if metrics.BlocksContributed > 0 {
+			healthy = append(healthy, enode)
+		}
+	}
+	return healthy
 }
 
 func (p *peerManagerModule) removePeers(peers []string) {

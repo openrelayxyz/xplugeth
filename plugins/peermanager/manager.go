@@ -51,6 +51,19 @@ func (service *PeerManager) attachPeers(peer string) {
 	log.Info("added peer, peer manager plugin", "added", peer)
 }
 
+func (service *PeerManager) attachGenericPeers(peer string) {
+
+	var addPeerResult bool
+	err := service.client.Call(&addPeerResult, "admin_addPeer", peer)
+	if err != nil {
+		log.Error("error calling admin_addPeer, peer manager plugin", "peer", peer, "err", err)
+	}
+	if !addPeerResult {
+		log.Error("addPeer returned false, peer manager plugin", "peer", peer, "err", err)
+	}
+	log.Info("added peer, peer manager plugin", "added", peer)
+}
+
 type myIp struct {
 	IP string `json:"ip"`
 }
