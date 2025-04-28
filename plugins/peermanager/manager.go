@@ -30,7 +30,6 @@ func (service *PeerManager) getEnode() (string, error) {
 }
 
 func (service *PeerManager) attachPeers(peer string) {
-
 	var addTrustedPeerResult bool
 	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
 	if err != nil {
@@ -51,17 +50,16 @@ func (service *PeerManager) attachPeers(peer string) {
 	log.Info("added peer, peer manager plugin", "added", peer)
 }
 
-func (service *PeerManager) attachGenericPeers(peer string) {
-
+func (service *PeerManager) attachPeerOnly(peer string) {
 	var addPeerResult bool
 	err := service.client.Call(&addPeerResult, "admin_addPeer", peer)
 	if err != nil {
 		log.Error("error calling admin_addPeer, peer manager plugin", "peer", peer, "err", err)
 	}
 	if !addPeerResult {
-		log.Error("addPeer returned false, peer manager plugin", "peer", peer, "err", err)
+		log.Error("addPeer returned false, peer manager plugin", "peer", peer)
 	}
-	log.Info("added peer, peer manager plugin", "added", peer)
+	log.Info("added generic peer, peer manager plugin", "peer", peer)
 }
 
 type myIp struct {

@@ -28,10 +28,6 @@ type peerManagerConfig struct {
 	PeerTopic string `yaml:"peer.topic"`
 }
 
-type peerBroadcast struct {
-	Generic []string `json:"generic"`
-}
-
 type PeerMetrics struct {
 	ID                string
 	BlocksContributed int
@@ -39,6 +35,7 @@ type PeerMetrics struct {
 	LastDisconnected  time.Time
 	IsConnected       bool
 	ConnectedTime     time.Duration
+	IsInbound 		  bool 
 }
 
 var (
@@ -65,6 +62,7 @@ var (
 type peerManagerModule struct {
 	peerMetricsMap map[string]*PeerMetrics
 	mutex          sync.Mutex
+	peerRatios     map[string]float64
 }
 
 func init() {
@@ -130,6 +128,9 @@ func (p *peerManagerModule) peeringSequence() {
 		return
 	}
 
+	type peerBroadcast struct {
+		Generic []string `json:"generic"`
+	}
 	payload := peerBroadcast{
 		Generic: p.getHealthyPeers(),
 	}
@@ -149,7 +150,14 @@ func (p *peerManagerModule) peeringSequence() {
 
 	go func() {
 		for message := range consumer.Messages() {
-			nodes <- string(message.Value)
+			var incoming peerBroadcast
+			if err := json.Unmarshal(message.Value, &incoming); err != nil{
+				log.Error("failed to marshal peer payload", "err", err)
+				continue
+			}
+			for _, node := range incoming.Generic {
+				nodes <- node
+			}
 		}
 	}()
 
@@ -165,12 +173,17 @@ func (p *peerManagerModule) peeringSequence() {
 		if m == selfNode{
 			continue
 		} else {
-			sessionPeerService.attachGenericPeers(m)
+			sessionPeerService.attachPeerOnly(m)
 		}
 	}
 }
 
-func getPeers() ([]string, error) {
+type peerInfo struct {
+    ID      string
+    Inbound bool
+}
+
+func getPeers() ([]peerInfo, error) {
 	var rawPeerData []map[string]interface{}
 	err := sessionPeerService.client.Call(&rawPeerData, "admin_peers")
 	if err != nil {
@@ -178,13 +191,26 @@ func getPeers() ([]string, error) {
 		return nil, err
 	}
 
-	peers := []string{}
+	peers := []peerInfo{}
 
 	for _, item := range rawPeerData {
+		var id string
+		var inbound bool
 		for k, v := range item {
 			if k == "id" {
-				peers = append(peers, v.(string))
+				id = v.(string)
 			}
+			if k == "network" {
+				network := v.(map[string]interface{})
+				inbound = network["inbound"].(bool)
+			}
+		}
+
+		if id != ""{
+			peers = append(peers, peerInfo{
+				ID: id,
+				Inbound: inbound,
+			})
 		}
 	}
 
@@ -227,33 +253,34 @@ func (p *peerManagerModule) cleanUpPeerMap() {
 			}
 		}
 	}()
-
 }
 
 func (p *peerManagerModule) updatePeerConnections() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	peerIDs, err := getPeers()
+	peers, err := getPeers()
 	if err != nil {
 		log.Error("Failed to get peers", "err", err)
 		return
 	}
 
 	currentPeers := make(map[string]bool)
-	for _, id := range peerIDs {
-		currentPeers[id] = true
+	for _, peer := range peers {
+		currentPeers[peer.ID] = true
 
-		peerMetric, exists := p.peerMetricsMap[id]
+		peerMetric, exists := p.peerMetricsMap[peer.ID]
 		if !exists {
-			p.peerMetricsMap[id] = &PeerMetrics{
-				ID:            id,
+			p.peerMetricsMap[peer.ID] = &PeerMetrics{
+				ID:            peer.ID,
 				IsConnected:   true,
 				LastConnected: time.Now(),
+				IsInbound:     peer.Inbound,
 			}
 		} else if !peerMetric.IsConnected {
 			peerMetric.IsConnected = true
 			peerMetric.LastConnected = time.Now()
+			peerMetric.IsInbound = peer.Inbound
 		}
 	}
 
@@ -265,41 +292,50 @@ func (p *peerManagerModule) updatePeerConnections() {
 		}
 	}
 
-	if len(p.peerMetricsMap) < int(float64(maxPeers)*0.9) {
-		return
-	}
-
-	// performance ration based of block contributions and connection duration
-	peerRatios := make(map[string]float64)
-	var peersToDrop []string
-
-	for id, peer := range p.peerMetricsMap {
-		if peer.IsConnected {
-			connectedDuration := peer.ConnectedTime + time.Since(peer.LastConnected)
-			if connectedDuration >= *connectionTimeCoefficient {
-				peerRatios[id] = float64(peer.BlocksContributed) / connectedDuration.Seconds()
+	p.peerRatios = make(map[string]float64)
+		for id, peer := range p.peerMetricsMap {
+			if peer.IsConnected {
+				connectedDuration := peer.ConnectedTime + time.Since(peer.LastConnected)
+				if connectedDuration >= *connectionTimeCoefficient {
+					p.peerRatios[id] = float64(peer.BlocksContributed) / connectedDuration.Seconds()
 			}
 		}
 	}
 
-	if len(peerRatios) == 0 {
+	if len(p.peerMetricsMap) > int(float64(maxPeers)*0.9) {
+		p.prunePeers(true)
+	} else {
+		var outboundCount float64
+		for _, peer := range p.peerMetricsMap{
+			if !peer.IsInbound{
+				outboundCount++
+			}
+		}
+
+		if outboundCount >= float64(len(p.peerMetricsMap)) * 0.9 {
+			p.prunePeers(false)
+		}
+	}
+}
+
+func (p *peerManagerModule) prunePeers(pruneAll bool){
+	if len(p.peerRatios) == 0 {
 		return
 	}
-
-	// sorts and removes bottom 10 
-	dropCount := int(float64(len(peerRatios)) * 0.1)
-	if dropCount > 0 {
-		peers := make([]string, 0, len(peerRatios))
-		for id := range peerRatios {
-			peers = append(peers, id)
+	var peersToDrop []string
+	for id, peer := range p.peerMetricsMap {
+		if pruneAll || !peer.IsInbound {
+			peersToDrop = append(peersToDrop, id)
 		}
-		sort.Slice(peers, func(i, j int) bool {
-			return peerRatios[peers[i]] < peerRatios[peers[j]]
-		})
-		peersToDrop = peers[:dropCount]
-		p.removePeers(peersToDrop)
-
 	}
+	dropCount := int(0.1 * float64(len(peersToDrop)))
+	if dropCount == 0 {
+		return
+	}
+	sort.Slice(peersToDrop, func(i, j int) bool {
+		return p.peerRatios[peersToDrop[i]] < p.peerRatios[peersToDrop[j]]
+	})
+	p.removePeers(peersToDrop[:dropCount])
 }
 
 func (p *peerManagerModule) getHealthyPeers() []string{
