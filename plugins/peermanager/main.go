@@ -75,10 +75,10 @@ func (p *peerManagerModule) Blockchain() {
 	if sessionPeerService == nil {
 		panic(fmt.Sprintf("peer manager is nil, peer manager plugin"))
 	}
-	go p.peeringSequence()
+	go peeringSequence()
 }
 
-func (p *peerManagerModule) peeringSequence() {
+func peeringSequence() {
 
 	selfNode, err := sessionPeerService.getEnode()
 	if err != nil {
