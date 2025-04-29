@@ -55,7 +55,7 @@ async def subscribe_to_websocket(file_name, namespace):
                     logging.error(f"Unexpected error: {e}")
                     break
     except Exception as e:
-        logging.Error(f"failed to connect to websocket {e}")
+        logging.error(f"failed to connect to websocket {e}")
         
 if __name__ == "__main__":
     asyncio.run(subscribe_to_websocket(sys.argv[1], sys.argv[2]))
