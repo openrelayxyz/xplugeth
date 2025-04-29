@@ -23,11 +23,6 @@ import (
 	"github.com/openrelayxyz/xplugeth/utils"
 )
 
-type peerManagerConfig struct {
-	BrokerURL string `yaml:"broker.url"`
-	PeerTopic string `yaml:"peer.topic"`
-}
-
 type PeerMetrics struct {
 	ID                string
 	BlocksContributed int
@@ -42,54 +37,34 @@ var (
 	blockCount = 0
 	maxPeers   int
 
-	sessionPeerService *PeerManager
-	activeModule       *peerManagerModule 
+	sessionPeerService *PeerEval 
 	chainid            int64
-	brokers            []string
-	config             *sarama.Config
-	nodes              = make(chan string, 5)
-	exit               = make(chan struct{}, 1)
-	cfg                *peerManagerConfig
-	peerBroker         string
-	peerTopic          string
 
 	flags                     = *flag.NewFlagSet("peereval-plugin", flag.ContinueOnError)
 	maxPeerCount              = flags.Int("peereval.max.peers", 0, "max peer value for peer eval plugin")
 	pollingInterval           = flags.Duration("peereval.polling.interval", time.Minute, "polling interval for peer monitoring")
 	connectionTimeCoefficient = flags.Duration("peereval.connection.time.coefficient", 5*time.Minute, "minimum connection time before evaluating peers")
 )
+type PeerEval struct {
+	client *rpc.Client
+}
 
-type peerManagerModule struct {
+
+type peerEvalModule struct {
 	peerMetricsMap map[string]*PeerMetrics
 	mutex          sync.Mutex
 	peerRatios     map[string]float64
 }
 
 func init() {
-	xplugeth.RegisterModule[peerManagerModule]("peerManagerModule")
+	xplugeth.RegisterModule[peerEvalModule]("peerEvalModule")
 }
 
-func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
+func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
 
-	sessionPeerService = &PeerManager{
+	sessionPeerService = &PeerEval{
 		client: s.Attach(),
 	}
-	activeModule = p
-
-	var ok bool
-
-	chainid, ok = utils.GetChainID()
-	if !ok {
-		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, peermanager"))
-	}
-
-	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
-	if !ok {
-		cfg = &peerManagerConfig{}
-		log.Warn("did not acqire config, example plugin, all values set to default")
-	}
-	peerBroker = cfg.BrokerURL
-	peerTopic = cfg.PeerTopic
 
 	if *maxPeerCount == 0 {
 		log.Warn("max peer count flag not set, peer eval plugin, setting to a default of 20")
@@ -99,82 +74,12 @@ func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 	p.StartPeerMonitoring()
 	p.cleanUpPeerMap()
 
-	log.Info("Initialized node, peer manager plugin")
+	log.Info("Initialized node, peer eval plugin")
 }
 
-func (p *peerManagerModule) Blockchain() {
+func (p *peerEvalModule) Blockchain() {
 	if sessionPeerService == nil {
-		panic(fmt.Sprintf("peer manager is nil, peer manager plugin"))
-	}
-	go p.peeringSequence()
-}
-
-func (p *peerManagerModule) peeringSequence() {
-
-	selfNode, err := sessionPeerService.getEnode()
-	if err != nil {
-		log.Error("error calling getEnode from sessionService, peer manager plugin", "err", err)
-	}
-
-	producer, err := createProducer(peerBroker, peerTopic)
-	if err != nil {
-		log.Error("failed to acquire kafka producer, peer manager plugin", "err", err)
-		return
-	}
-
-	consumer, err := createConsumer(peerBroker, peerTopic)
-	if err != nil {
-		log.Error("failed to acquire kafka consumer, peer manager plugin", "err", err)
-		return
-	}
-
-	type peerBroadcast struct {
-		Generic []string `json:"generic"`
-	}
-	payload := peerBroadcast{
-		Generic: p.getHealthyPeers(),
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		log.Error("failed to marshal peer payload", "err", err)
-		return
-	}
-
-	msg := &sarama.ProducerMessage{
-		Topic: peerTopic,
-		Value: sarama.ByteEncoder(data),
-	}
-
-	producer.Input() <- msg
-
-	go func() {
-		for message := range consumer.Messages() {
-			var incoming peerBroadcast
-			if err := json.Unmarshal(message.Value, &incoming); err != nil{
-				log.Error("failed to marshal peer payload", "err", err)
-				continue
-			}
-			for _, node := range incoming.Generic {
-				nodes <- node
-			}
-		}
-	}()
-
-	for message := range nodes {
-		if message == selfNode {
-			continue
-		} else {
-			sessionPeerService.attachPeers(message)
-		}
-	}
-
-	for _, m := range payload.Generic{
-		if m == selfNode{
-			continue
-		} else {
-			sessionPeerService.attachPeerOnly(m)
-		}
+		panic(fmt.Sprintf("peer eval is nil, peer eval plugin"))
 	}
 }
 
@@ -217,7 +122,7 @@ func getPeers() ([]peerInfo, error) {
 	return peers, nil
 }
 
-func (p *peerManagerModule) PeerEval(id string, headers []*gtypes.Header) {
+func (p *peerEvalModule) PeerEval(id string, headers []*gtypes.Header) {
 	blockCount += len(headers)
 
 	if _, exists := p.peerMetricsMap[id]; !exists {
@@ -232,7 +137,7 @@ func (p *peerManagerModule) PeerEval(id string, headers []*gtypes.Header) {
 	peerMetric.BlocksContributed += len(headers)
 }
 
-func (p *peerManagerModule) StartPeerMonitoring() {
+func (p *peerEvalModule) StartPeerMonitoring() {
 	ticker := time.NewTicker(*pollingInterval)
 	go func() {
 		for range ticker.C {
@@ -241,7 +146,7 @@ func (p *peerManagerModule) StartPeerMonitoring() {
 	}()
 }
 
-func (p *peerManagerModule) cleanUpPeerMap() {
+func (p *peerEvalModule) cleanUpPeerMap() {
 	ticker := time.NewTicker(*pollingInterval)
 	go func() {
 		for range ticker.C {
@@ -255,7 +160,7 @@ func (p *peerManagerModule) cleanUpPeerMap() {
 	}()
 }
 
-func (p *peerManagerModule) updatePeerConnections() {
+func (p *peerEvalModule) updatePeerConnections() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -318,7 +223,7 @@ func (p *peerManagerModule) updatePeerConnections() {
 	}
 }
 
-func (p *peerManagerModule) prunePeers(pruneAll bool){
+func (p *peerEvalModule) prunePeers(pruneAll bool){
 	if len(p.peerRatios) == 0 {
 		return
 	}
@@ -338,7 +243,7 @@ func (p *peerManagerModule) prunePeers(pruneAll bool){
 	p.removePeers(peersToDrop[:dropCount])
 }
 
-func (p *peerManagerModule) getHealthyPeers() []string{
+func (p *peerEvalModule) getHealthyPeers() []string{
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -351,7 +256,7 @@ func (p *peerManagerModule) getHealthyPeers() []string{
 	return healthy
 }
 
-func (p *peerManagerModule) removePeers(peers []string) {
+func (p *peerEvalModule) removePeers(peers []string) {
 	for _, id := range peers {
 		var result bool
 		if err := sessionPeerService.client.Call(&result, "admin_removePeer", fmt.Sprintf("enode://%s", id)); err != nil {
@@ -363,21 +268,9 @@ func (p *peerManagerModule) removePeers(peers []string) {
 	}
 }
 
-type peerManagerAPI struct{}
-
-func (p *peerManagerModule) GetAPIs(*node.Node, types.Backend) []rpc.API {
-	log.Info("Registering peer eval plugin APIs")
-	return []rpc.API{
-		{
-			Namespace: "plugeth",
-			Service:   &peerManagerAPI{},
-		},
-	}
-}
 
 var (
-	_ apis.GetAPIs           = (*peerManagerModule)(nil)
-	_ initialize.Blockchain  = (*peerManagerModule)(nil)
-	_ initialize.Initializer = (*peerManagerModule)(nil)
-	_ fetcher.PeerEvalPlugin = (*peerManagerModule)(nil)
+	// _ initialize.Blockchain  = (*peerEvalModule)(nil)
+	_ initialize.Initializer = (*peerEvalModule)(nil)
+	_ fetcher.PeerEvalPlugin = (*peerEvalModule)(nil)
 )
