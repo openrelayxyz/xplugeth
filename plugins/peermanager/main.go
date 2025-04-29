@@ -1,14 +1,23 @@
 package peermanager
 
 import (
+	"flag"
 	"fmt"
+	"sort"
+	"sync"
+	"time"
 
 	"github.com/Shopify/sarama"
 
+	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
+	"encoding/json"
 
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/hooks/apis"
+	"github.com/openrelayxyz/xplugeth/hooks/fetcher"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
@@ -26,26 +35,27 @@ var (
 	config             *sarama.Config
 	nodes              = make(chan string, 5)
 	exit               = make(chan struct{}, 1)
-	cfg 			   *peerManagerConfig
+	cfg                *peerManagerConfig
 	peerBroker         string
-	peerTopic		   string
+	peerTopic          string
 )
 
-type peerManagerModule struct{}
+type peerManagerModule struct {
+	
+}
 
 func init() {
 	xplugeth.RegisterModule[peerManagerModule]("peerManagerModule")
 }
 
-func (*peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
+func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 
 	sessionPeerService = &PeerManager{
 		client: s.Attach(),
 	}
 
 	var ok bool
-
-	chainid, ok = utils.GetChainID() 
+	chainid, ok = utils.GetChainID()
 	if !ok {
 		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, peermanager"))
 	}
@@ -53,26 +63,22 @@ func (*peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
 	if !ok {
 		cfg = &peerManagerConfig{}
-		log.Warn("did not acqire config, peermanager plugin, all values set to default")
+		log.Warn("did not acqire config, example plugin, all values set to default")
 	}
 	peerBroker = cfg.BrokerURL
-	peerTopic  = cfg.PeerTopic
+	peerTopic = cfg.PeerTopic
 
 	log.Info("Initialized node, peer manager plugin")
 }
 
-func (*peerManagerModule) Blockchain() {
+func (p *peerManagerModule) Blockchain() {
 	if sessionPeerService == nil {
 		panic(fmt.Sprintf("peer manager is nil, peer manager plugin"))
 	}
-
-	if cfg.BrokerURL != "" {
-		log.Error("broker not nil", "broker", cfg.BrokerURL)
-		go peeringSequence()
-	}
+	go p.peeringSequence()
 }
 
-func peeringSequence() {
+func (p *peerManagerModule) peeringSequence() {
 
 	selfNode, err := sessionPeerService.getEnode()
 	if err != nil {
@@ -112,6 +118,7 @@ func peeringSequence() {
 		}
 	}
 }
+
 
 var (
 	_ initialize.Blockchain  = (*peerManagerModule)(nil)

@@ -1,10 +1,10 @@
 package peermanager
 
 import (
-	"fmt"
-	"net/http"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -30,7 +30,6 @@ func (service *PeerManager) getEnode() (string, error) {
 }
 
 func (service *PeerManager) attachPeers(peer string) {
-
 	var addTrustedPeerResult bool
 	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
 	if err != nil {
@@ -51,6 +50,18 @@ func (service *PeerManager) attachPeers(peer string) {
 	log.Info("added peer, peer manager plugin", "added", peer)
 }
 
+func (service *PeerManager) attachPeerOnly(peer string) {
+	var addPeerResult bool
+	err := service.client.Call(&addPeerResult, "admin_addPeer", peer)
+	if err != nil {
+		log.Error("error calling admin_addPeer, peer manager plugin", "peer", peer, "err", err)
+	}
+	if !addPeerResult {
+		log.Error("addPeer returned false, peer manager plugin", "peer", peer)
+	}
+	log.Info("added generic peer, peer manager plugin", "peer", peer)
+}
+
 type myIp struct {
 	IP string `json:"ip"`
 }
@@ -64,9 +75,11 @@ func analyzeEnode(raw string) string {
 	port := secondPass[1]
 
 	if ip == "127.0.0.1" {
-		if publicIP := getPublicIP(); publicIP != "" { ip = publicIP } 
+		if publicIP := getPublicIP(); publicIP != "" {
+			ip = publicIP
+		}
 	}
-	
+
 	return nodeId + "@" + ip + ":" + port
 }
 
@@ -84,11 +97,11 @@ func getPublicIP() string {
 		return ""
 	}
 
-	var myip myIp 
+	var myip myIp
 	if err := json.Unmarshal(raw, &myip); err != nil {
 		log.Error("error unmarshaling myip json, peer manager, retrying", "err", err)
 		return ""
-	} 
+	}
 
 	return myip.IP
 }
