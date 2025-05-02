@@ -31,7 +31,6 @@ func (service *PeerManager) getEnode() (string, error) {
 
 func (service *PeerManager) attachPeers(peer string) {
 	var addTrustedPeerResult bool
-	log.Error("attaching peer", "enode", peer )
 	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
 	if err != nil {
 		log.Error("error calling admin_addTrustedPeer, peer manager plugin", "peer", peer, "err", err)

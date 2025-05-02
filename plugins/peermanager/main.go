@@ -91,7 +91,6 @@ func peeringSequence() {
 		Topic: peerTopic,
 		Value: sarama.StringEncoder(selfNode),
 	}
-	log.Warn("inside peeringSeequence", "selfNode", selfNode, "peerTopic", peerTopic, "broker", peerBroker)
 
 	producer.Input() <- msg
 
@@ -103,7 +102,6 @@ func peeringSequence() {
 
 	for message := range nodes {
 		if message == selfNode {
-			log.Error("received own node message", "node", selfNode)
 			continue
 		} else {
 			sessionPeerService.attachPeers(message)
