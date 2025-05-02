@@ -7,10 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/consensys/gnark-crypto/ecc/bw6-756/fr/permutation"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/opentracing/opentracing-go/log"
 )
 
 type pseudoNodeInfo struct {
