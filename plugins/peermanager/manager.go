@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/consensys/gnark-crypto/ecc/bw6-756/fr/permutation"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/opentracing/opentracing-go/log"
 )
 
 type pseudoNodeInfo struct {
@@ -31,6 +33,7 @@ func (service *PeerManager) getEnode() (string, error) {
 
 func (service *PeerManager) attachPeers(peer string) {
 	var addTrustedPeerResult bool
+	log.Error("attaching peer", "enode", peer )
 	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
 	if err != nil {
 		log.Error("error calling admin_addTrustedPeer, peer manager plugin", "peer", peer, "err", err)
