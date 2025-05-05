@@ -37,6 +37,7 @@ import (
 // the imports below are bringing in other plugins which have to be present for the producer to function properly
 import (
 	"github.com/openrelayxyz/xplugeth/plugins/blockupdates"
+	_ "github.com/openrelayxyz/xplugeth/plugins/peereval"
 )
 
 type cardinalProducerModule struct {
@@ -53,6 +54,7 @@ type ExternalStreamSchema interface {
 }
 
 func init() {
+	xplugeth.RegisterSubCommands(subCommands)
 	xplugeth.RegisterModule[cardinalProducerModule]("cardinalProducerModule")
 
 	xplugeth.RegisterHook[ExternalAddBlock]()
@@ -127,6 +129,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	if cfg.ReceiptTopic == "" { cfg.ReceiptTopic = fmt.Sprintf("%v-receipt", cfg.DefaultTopic) }
 	if cfg.CodeTopic == "" { cfg.CodeTopic = fmt.Sprintf("%v-code", cfg.DefaultTopic) }
 	if cfg.StateTopic == "" { cfg.StateTopic = fmt.Sprintf("%v-state", cfg.DefaultTopic) }
+	if cfg.hcTolerance == 0 { cfg.hcTolerance = 36 }
 	var err error
 	brokers := []transports.ProducerBrokerParams{
 		{
@@ -226,13 +229,6 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 				20 * time.Second,
 				"cardinal.geth.master",
 				udpAddr,
-			)
-		}
-		if cfg.Cloudwatchns != "" {
-			go cloudmetrics.Publish(metrics.MajorRegistry,
-				cfg.Cloudwatchns,
-				cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
-				cloudmetrics.Interval(30 * time.Second),
 			)
 		}
 		if cfg.StartBlockOverride > 0 {
@@ -461,7 +457,22 @@ func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, dest
 	return weight, updates, deletes, batches, batchUpdates
 }
 
+var publishOnce sync.Once
+
 func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
+	if cfg.Cloudwatchns != "" {
+		mark := uint64(time.Now().Unix())
+		blockTime := block.Time()
+		if mark - blockTime <= cfg.hcTolerance {
+				publishOnce.Do(func() {
+				go cloudmetrics.Publish(metrics.MajorRegistry,
+					cfg.Cloudwatchns,
+					cloudmetrics.Dimensions("chainid", fmt.Sprintf("%v", chainid)),
+					cloudmetrics.Interval(30 * time.Second),
+				)
+			})
+		}
+	}
 	if producer == nil {
 		panic("Unknown broker. Please set --cardinal.broker.url")
 	}
@@ -517,6 +528,7 @@ type cardinalAPI struct {
 
 func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNumber) (bool, error) {
 	client := api.stack.Attach()
+	defer client.Close()
 	
 	var currentBlock int64
 	client.Call(&currentBlock, "eth_blockNumber")

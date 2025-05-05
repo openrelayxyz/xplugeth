@@ -31,20 +31,7 @@ type PeerEvalPlugin interface {
 }
 
 func init() {
-	xplugeth.RegisterHook[NewHeadPlugin](
-		xplugeth.Patchset{
-			Remote: "github.com/openrelayxyz/xplugeth-patches",
-			Ref: "hooks_bor_blockchain_v1.5.2_2",
-			Tests: []xplugeth.Test{
-				{
-					Package: "./core",
-					TestNames: []string{
-						"TestCoreInjections",
-					},
-				},
-			},
-		},
-	)
+	xplugeth.RegisterHook[NewHeadPlugin](blockchainPatchsets...)
 	xplugeth.RegisterHook[NewSideBlockPlugin]()
 	xplugeth.RegisterHook[ReorgPlugin]()
 	xplugeth.RegisterHook[SetTrieFlushIntervalClonePlugin]()

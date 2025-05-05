@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	cli "github.com/urfave/cli/v2"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -15,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/openrelayxyz/xplugeth/utils"
 )
 
 var (
@@ -78,9 +79,9 @@ var (
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").Bytes()
 	// emptyCode is the known hash of the empty EVM bytecode.
 	emptyCode = crypto.Keccak256(nil)
-	Subcommands = map[string]func(cli.Context, []string) error {
+	subCommands = map[string]func([]string) error {
 		"triedump": trieDump,
-		"statedump": func(cli.Context, []string) error {
+		"statedump": func([]string) error {
 			log.Info("Starting state dump")
 			db := backend.ChainDb()
 			snaprootbytes, _ := db.Get(snapRootKey)
@@ -93,7 +94,11 @@ var (
 				if err != nil { return err }
 			}
 			blockno := uint64(header.Number.Int64())
-			td := backend.GetTd(context.Background(), header.Hash())
+			td, err := utils.GetTd(header.Hash())
+			if err != nil {
+				log.Error("error acquiring total difficulty, statedump, producer", "hash", header.Hash(), "err", err)
+				return err
+			}
 
 			acctIter := db.NewIterator(snapshotAccountPrefix, nil)
 			defer acctIter.Release()
