@@ -3,14 +3,20 @@ package peermanager
 import (
 	"fmt"
 
+	"github.com/RichardKnop/machinery/v1/log"
 	"github.com/Shopify/sarama"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"encoding/json"
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
+)
+
+import (
+	_ "github.com/openrelayxyz/xplugeth/plugins/peereval"
 )
 
 type peerManagerConfig struct {
@@ -32,6 +38,10 @@ var (
 
 type peerManagerModule struct {
 	
+}
+
+type HealthyPeers interface {
+	GetHealthyPeers() []string
 }
 
 func init() {
@@ -87,24 +97,82 @@ func peeringSequence() {
 		return
 	}
 
-	msg := &sarama.ProducerMessage{
-		Topic: peerTopic,
-		Value: sarama.StringEncoder(selfNode),
+	type peerBroadcast struct {
+		Generic []string `json:"generic"`
 	}
 
-	producer.Input() <- msg
+	var eval []HealthyPeers
+	if xplugeth.HasModule("peerEvalModule") {
+		eval = xplugeth.GetModules[HealthyPeers]()
+		if len(eval) == 0 {
+            log.Warn("peerEvalModule present but no GetHealthyPeers found")
+        }
+	}
 
-	go func() {
-		for message := range consumer.Messages() {
-			nodes <- string(message.Value)
+	if len(eval) > 0 {
+		peers := eval[0].GetHealthyPeers()
+		payload := peerBroadcast{
+			Generic: peers,
 		}
-	}()
+		data, err := json.Marshal(payload)
+		if err != nil {
+			log.Error("failed to marshal peer payload", "err", err)
+			return
+		}
+		msg := &sarama.ProducerMessage{
+				Topic: peerTopic,
+				Value: sarama.ByteEncoder(data),
+		}
 
-	for message := range nodes {
-		if message == selfNode {
-			continue
-		} else {
-			sessionPeerService.attachPeers(message)
+		producer.Input() <- msg
+
+		go func(){
+			for message := range consumer.Messages() {
+				var incoming peerBroadcast
+				if err := json.Unmarshal(message.Value, &incoming); err != nil{
+					log.Error("failed to unmarshal peer payload", "err", err)
+					continue
+				}
+				for _, node := range incoming.Generic {
+					nodes <- node
+				}
+			}
+		}()
+
+		for _, n := range payload.Generic{
+			if n == selfNode{
+				continue
+			} else {
+				sessionPeerService.attachPeerOnly(n)
+			}
+		}
+
+		for node := range nodes {
+			if node == selfNode {
+				continue
+			} else {
+				sessionPeerService.attachPeers(node)
+			}
+		}
+	} else{
+		msg := &sarama.ProducerMessage{
+			Topic: peerTopic,
+			Value: sarama.StringEncoder(selfNode),
+		}
+		producer.Input() <- msg
+	
+		go func() {
+			for message := range consumer.Messages() {
+				nodes <- string(message.Value)
+			}
+		}()
+	
+		for message := range nodes {
+			if message == selfNode {
+				continue
+			} else {
+				sessionPeerService.attachPeers(message)
+			}
 		}
 	}
 }
