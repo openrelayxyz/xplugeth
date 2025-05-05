@@ -88,7 +88,7 @@ def start_node(path_to_bin):
         subprocess.Popen(["python3", "ws_data_capture.py", "test_plugeth_data", "plugeth"])
         time.sleep(2)
         import_chain()
-        time.sleep(2)
+        time.sleep(15)
         subprocess.Popen(["python3", "ws_data_capture.py", "test_card_data", "cardinal"])
 
     except Exception as e:
@@ -138,6 +138,9 @@ def test_main(bin_path):
     check_cardinal_values()
     
     cleanup()
+
+# NOTE the binary produced by the build tool will not work for this test. The xplugeth_imports.go in workdir/cmd/geth will need to be modified to point to 
+# xplugeth/plugins/merge and, after running go get, the binary will need to be built with the -tags=xplugeth tag. 
 
 # pytest --bin-path=/path/to/binary if being run with pytest 
 # python3 test_main.py /path/to/binary for debugging
