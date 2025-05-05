@@ -1,4 +1,4 @@
-package peermanager
+package peereval
 
 import (
 	"flag"
@@ -7,20 +7,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Shopify/sarama"
 
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-	"encoding/json"
 
 	"github.com/openrelayxyz/xplugeth"
-	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/fetcher"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
-	"github.com/openrelayxyz/xplugeth/utils"
 )
 
 type PeerMetrics struct {
