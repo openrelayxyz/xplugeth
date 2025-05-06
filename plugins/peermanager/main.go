@@ -105,6 +105,7 @@ func peeringSequence() {
 	}
 
 	if len(eval) > 0 {
+		log.Info("Evaluating peers in peermanager")
 		peers := eval[0].GetHealthyPeers()
 		payload := peerBroadcast{
 			Generic: peers,
@@ -144,12 +145,14 @@ func peeringSequence() {
 
 		for node := range nodes {
 			if node == selfNode {
+				log.Error("received own node message", "peereval, node", selfNode)
 				continue
 			} else {
 				sessionPeerService.attachPeers(node)
 			}
 		}
 	} else{
+		log.Info("using default stream in peermanager")
 		msg := &sarama.ProducerMessage{
 			Topic: peerTopic,
 			Value: sarama.StringEncoder(selfNode),
@@ -164,6 +167,7 @@ func peeringSequence() {
 	
 		for message := range nodes {
 			if message == selfNode {
+				log.Error("received own node message", "node", selfNode)
 				continue
 			} else {
 				sessionPeerService.attachPeers(message)
