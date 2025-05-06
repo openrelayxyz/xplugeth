@@ -239,7 +239,7 @@ func (p *peerEvalModule) prunePeers(pruneAll bool){
 	p.removePeers(peersToDrop[:dropCount])
 }
 
-func (p *peerEvalModule) getHealthyPeers() []string{
+func (p *peerEvalModule) GetHealthyPeers() []string{
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
