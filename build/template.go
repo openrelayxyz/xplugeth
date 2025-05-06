@@ -33,7 +33,8 @@ func (*buildTemplateModule) GetAPIs(*node.Node, types.Backend) []rpc.API {
 func (*buildTemplateModule) NewHead(*gtypes.Block, common.Hash, []*gtypes.Log, *big.Int) {
 }
 
-func (*buildTemplateModule) Reorg(common.Hash, []common.Hash, []common.Hash) {
+// Reorg fires when a chain reorg occurs. This brings the plugin module into compliance with the blockchain.Reorg interface.  
+func (*buildTemplateModule) Reorg(name common.Hash, the []common.Hash, arguments []common.Hash) {
 }
 
 func (*buildTemplateModule) NewSideBlock(*gtypes.Block, common.Hash, []*gtypes.Log) {
