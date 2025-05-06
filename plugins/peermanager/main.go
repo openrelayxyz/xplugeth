@@ -3,18 +3,18 @@ package peermanager
 import (
 	"fmt"
 
+	"encoding/json"
+
 	"github.com/Shopify/sarama"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"encoding/json"
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
-)
 
-import (
+	"github.com/openrelayxyz/xplugeth/plugins/peereval"
 	_ "github.com/openrelayxyz/xplugeth/plugins/peereval"
 )
 
@@ -37,10 +37,6 @@ var (
 
 type peerManagerModule struct {
 	
-}
-
-type HealthyPeers interface {
-	GetHealthyPeers() []string
 }
 
 func init() {
@@ -100,9 +96,9 @@ func peeringSequence() {
 		Generic []string `json:"generic"`
 	}
 
-	var eval []HealthyPeers
+	var eval []peereval.HealthyPeers
 	if xplugeth.HasModule("peerEvalModule") {
-		eval = xplugeth.GetModules[HealthyPeers]()
+		eval = xplugeth.GetModules[peereval.HealthyPeers]()
 		if len(eval) == 0 {
             log.Warn("peerEvalModule present but no GetHealthyPeers found")
         }

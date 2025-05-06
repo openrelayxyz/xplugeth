@@ -29,6 +29,11 @@ type PeerMetrics struct {
 	IsInbound 		  bool 
 }
 
+type HealthyPeers interface {
+	GetHealthyPeers() []string
+}
+
+
 var (
 	blockCount = 0
 	maxPeers   int
@@ -54,6 +59,7 @@ type peerEvalModule struct {
 
 func init() {
 	xplugeth.RegisterModule[peerEvalModule]("peerEvalModule")
+	xplugeth.RegisterHook[HealthyPeers]()
 }
 
 func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
