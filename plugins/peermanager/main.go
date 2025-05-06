@@ -3,7 +3,6 @@ package peermanager
 import (
 	"fmt"
 
-	"github.com/RichardKnop/machinery/v1/log"
 	"github.com/Shopify/sarama"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
