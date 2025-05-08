@@ -20,54 +20,74 @@ import (
 	"github.com/openrelayxyz/xplugeth/types"
 )
 
+// init() registers the module with the plugin loader
 func init() {
 	xplugeth.RegisterModule[buildTemplateModule]("buildTemplateModule")
 }
 
 type buildTemplateModule struct {}
 
-func (*buildTemplateModule) GetAPIs(*node.Node, types.Backend) []rpc.API {
+// GetAPIs fires as the node is registering its APIs. It should return a list of rpc.API objects so that plugins can register new RPC methods. This brings the plugin module into compliance with the apis.GetAPIs interface.
+func (*buildTemplateModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	return nil
 }
 
-func (*buildTemplateModule) NewHead(*gtypes.Block, common.Hash, []*gtypes.Log, *big.Int) {
+// NewHead fires when a new cannonical block is set. Note that during reorgs blocks can enter the canonical chain without this method being called on them. This brings the plugin module into compliance with the blockchain.NewHeadPlugin interface.
+func (*buildTemplateModule) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, totalDifficulty *big.Int) {
 }
 
-func (*buildTemplateModule) Reorg(common.Hash, []common.Hash, []common.Hash) {
+// Reorg fires when a chain reorg occurs. This brings the plugin module into compliance with the blockchain.ReorgPlugin interface.
+func (*buildTemplateModule) Reorg(commonBlock common.Hash, oldChain []common.Hash, newChain []common.Hash) {
 }
 
-func (*buildTemplateModule) NewSideBlock(*gtypes.Block, common.Hash, []*gtypes.Log) {
+// NewSideBlock fires during the course of a reorg when a side block is set. This brings the plugin module into compliance with the blockchain.NewSideBlock interface.
+func (*buildTemplateModule) NewSideBlock(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log) {
 }
 
-func (*buildTemplateModule) SetTrieFlushIntervalClone(time.Duration) time.Duration {
+// SetTrieFlushIntervalClone fires as the node evaluates the interval in which to flush the trie to disk. This brings the plugin module into compliance with the blockchain.SetTrieFlushIntervalClonePlugin interface.
+func (*buildTemplateModule) SetTrieFlushIntervalClone(flushInterval time.Duration) time.Duration {
 	var t time.Duration
 	return t
 }
 
-func (*buildTemplateModule) InitializeNode(*node.Node, types.Backend) {
+// InitializeNode fires as the node starts. This brings the plugin module into compliance with the initialize.Initializer interface.
+func (*buildTemplateModule) InitializeNode(stack *node.Node, backend types.Backend) {
 	log.Info("build template plugin initailized")
 }
 
+// Blockchain fires on start up after InitializeNode and acts as a generic trigger for various type of plugin functionality.
+// This brings the plugin module into compliance with the initialize.Blockchain interface.
 func (*buildTemplateModule) Blockchain() {
 }
 
+// Shutdown is defered until the node is shutting down. This brings the plugin module into compliance with the initialize.Shutdown interface.
 func (*buildTemplateModule) Shutdown() {
 }
 
-func (*buildTemplateModule) ModifyAncients(uint64, *gtypes.Header) {
+// ModifyAncients as ancient write operations are commited. This brings the plugin module into compliance with the modifyancients.ModifyAncientsPlugin interface.
+func (*buildTemplateModule) ModifyAncients(index uint64, header *gtypes.Header) {
 }
 
-func (*buildTemplateModule) StateUpdate(common.Hash, common.Hash, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte) {
+// StateUpdate fires as state mutations are commited. This brings the plugin module into compliance with the stateupdates.StateUpdatePlugin interface.
+func (*buildTemplateModule) StateUpdate(blockRoot common.Hash, parentRoot common.Hash, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, codeUpdates map[common.Hash][]byte) {
 }
 
-func (*buildTemplateModule) PreTrieCommit(common.Hash) {
+// PreTrieCommit fires before all the children of a particular node are written to disk. This brings the plugin module into compliance with the triecommit.PreTrieCommit interface.
+func (*buildTemplateModule) PreTrieCommit(node common.Hash) {
 }
 
-func (*buildTemplateModule) PostTrieCommit(common.Hash) {
+// PostTrieCommit fires after all the children of a particular node are written to disk. This brings the plugin module into compliance with the triecommit.PostTrieCommit interface.
+func (*buildTemplateModule) PostTrieCommit(node common.Hash) {
 }
 
 
-
+// The following interface guards ensure that *buildTemplateModule implements the expected APIs correctly.
+// Interface guards are not strictly required, but simply registering a module with the plugin loader does
+// not guarantee interface compliance, and if an interface is not implemented correctly the hooks will
+// quietly fail to be invoked.
+//
+// We recommend using interface guards to do compile-time checks that a module implements the interfaces
+// it is intended to implement.
 var (
 	_ apis.GetAPIs = (*buildTemplateModule)(nil)
 	_ blockchain.NewHeadPlugin = (*buildTemplateModule)(nil)
