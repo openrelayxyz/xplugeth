@@ -147,7 +147,7 @@ func peeringSequence() {
 		}()
 
 	} else {
-		log.error("using default stream in peermanager")
+		log.Error("using default stream in peermanager")
 		msg := &sarama.ProducerMessage{
 			Topic: cfg.PeerTopic,
 			Value: sarama.StringEncoder(selfNode),
