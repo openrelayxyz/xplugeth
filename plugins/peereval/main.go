@@ -215,6 +215,8 @@ func (p *peerEvalModule) updatePeerConnections() {
 		}
 	}
 
+	log.Error("length of peerMetricsMap", "length", len(p.peerMetricsMap))
+
 	if len(p.peerMetricsMap) > int(float64(maxPeers)*0.9) {
 		p.prunePeers(true)
 	} else {
@@ -257,6 +259,7 @@ func (p *peerEvalModule) streamHealthyPeers() {
 	for range ticker.C {
 		p.mutex.Lock()
 		peers := p.GetHealthyPeers()
+		log.Error("len of healthyPeers", "length", len(peers))
 		p.mutex.Unlock()
 
 		if len(peers) == 0 {

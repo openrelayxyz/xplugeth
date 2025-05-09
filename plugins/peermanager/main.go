@@ -88,6 +88,7 @@ func peeringSequence() {
 	}
 
 	if xplugeth.HasModule("peerEvalModule") {
+		log.Error("peereval module present")
 		evalConsumer, err := utils.CreateConsumer(cfg.BrokerURL, cfg.EvalTopic)
 		if err != nil {
 			log.Error("failed to acquire peereval consumer, peer manager plugin", "err", err)
@@ -131,18 +132,22 @@ func peeringSequence() {
 					if !isPeerConnected(incoming.Trusted){
 						sessionPeerService.attachTrustedPeer(incoming.Trusted)
 					}
+				}else {
+					log.Error("trusted peer already exists")
 				}
 
 				for _, peer := range incoming.Generic{
 					if peer != selfNode && !isPeerConnected(peer){
 						sessionPeerService.attachPeerOnly(peer)
+					} else {
+						log.Error("skipping generic cause it already exists")
 					}
 				}
 			}
 		}()
 
 	} else {
-		log.Info("using default stream in peermanager")
+		log.error("using default stream in peermanager")
 		msg := &sarama.ProducerMessage{
 			Topic: cfg.PeerTopic,
 			Value: sarama.StringEncoder(selfNode),
