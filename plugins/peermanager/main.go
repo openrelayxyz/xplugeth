@@ -9,7 +9,6 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/opentracing/opentracing-go/log"
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
