@@ -29,7 +29,7 @@ func (service *PeerManager) getEnode() (string, error) {
 	return analyzeEnode(pni.Enode), nil
 }
 
-func (service *PeerManager) attachPeers(peer string) {
+func (service *PeerManager) attachTrustedPeer(peer string) {
 	var addTrustedPeerResult bool
 	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
 	if err != nil {

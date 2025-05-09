@@ -1,12 +1,14 @@
 package peereval
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/Shopify/sarama"
 
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -17,7 +19,13 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/fetcher"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
 )
+
+type peerEvalConfig struct {
+	BrokerURL string `yaml:"broker.url"`
+	Topic string `yaml:"topic"`
+}
 
 type PeerMetrics struct {
 	ID                string
@@ -33,23 +41,18 @@ type HealthyPeers interface {
 	GetHealthyPeers() []string
 }
 
-
 var (
 	blockCount = 0
 	maxPeers   int
 
-	sessionPeerService *PeerEval 
+	client  *rpc.Client 
 	chainid            int64
-
+	cfg  *peerEvalConfig
 	flags                     = *flag.NewFlagSet("peereval-plugin", flag.ContinueOnError)
 	maxPeerCount              = flags.Int("peereval.max.peers", 0, "max peer value for peer eval plugin")
 	pollingInterval           = flags.Duration("peereval.polling.interval", time.Minute, "polling interval for peer monitoring")
 	connectionTimeCoefficient = flags.Duration("peereval.connection.time.coefficient", 5*time.Minute, "minimum connection time before evaluating peers")
 )
-type PeerEval struct {
-	client *rpc.Client
-}
-
 
 type peerEvalModule struct {
 	peerMetricsMap map[string]*PeerMetrics
@@ -63,9 +66,14 @@ func init() {
 }
 
 func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
+	client =  s.Attach()
 
-	sessionPeerService = &PeerEval{
-		client: s.Attach(),
+	config, ok := xplugeth.GetConfig[peerEvalConfig]("peereval")
+	if !ok {
+		log.Warn("peerEval config not found, using defaults")
+		cfg = &peerEvalConfig{}
+	} else {
+		cfg = config
 	}
 
 	if *maxPeerCount == 0 {
@@ -80,9 +88,7 @@ func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
 }
 
 func (p *peerEvalModule) Blockchain() {
-	if sessionPeerService == nil {
-		panic(fmt.Sprintf("peer eval is nil, peer eval plugin"))
-	}
+	go p.streamHealthyPeers()
 }
 
 type peerInfo struct {
@@ -92,7 +98,7 @@ type peerInfo struct {
 
 func getPeers() ([]peerInfo, error) {
 	var rawPeerData []map[string]interface{}
-	err := sessionPeerService.client.Call(&rawPeerData, "admin_peers")
+	err := client.Call(&rawPeerData, "admin_peers")
 	if err != nil {
 		log.Error("error calling admin_peers, peerEval plugin", "err", err)
 		return nil, err
@@ -225,6 +231,52 @@ func (p *peerEvalModule) updatePeerConnections() {
 	}
 }
 
+func (p *peerEvalModule) GetHealthyPeers() []string{
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	var healthy []string
+	for enode, metrics := range p.peerMetricsMap {
+		if metrics.BlocksContributed > 0 {
+			healthy = append(healthy, enode)
+		}
+	}
+	return healthy
+}
+
+func (p *peerEvalModule) streamHealthyPeers() {
+	ticker := time.NewTicker(*pollingInterval)
+	defer ticker.Stop()
+
+	producer, err := utils.CreateProducer(cfg.BrokerURL, cfg.Topic)
+	if err != nil {
+		log.Error("failed to create Kafka producer", "err", err)
+		return
+	}
+
+	for range ticker.C {
+		p.mutex.Lock()
+		peers := p.GetHealthyPeers()
+		p.mutex.Unlock()
+
+		if len(peers) == 0 {
+			continue
+		}
+
+		data, err := json.Marshal(peers)
+		if err != nil {
+			log.Error("failed to marshal healthy peers", "err", err)
+			continue
+		}
+		msg := &sarama.ProducerMessage{
+			Topic : cfg.Topic,
+			Value : sarama.ByteEncoder(data),
+		}
+		log.Error("sending generic peer")
+		producer.Input() <-msg 
+	}
+}
+
 func (p *peerEvalModule) prunePeers(pruneAll bool){
 	if len(p.peerRatios) == 0 {
 		return
@@ -245,23 +297,10 @@ func (p *peerEvalModule) prunePeers(pruneAll bool){
 	p.removePeers(peersToDrop[:dropCount])
 }
 
-func (p *peerEvalModule) GetHealthyPeers() []string{
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
-	var healthy []string
-	for enode, metrics := range p.peerMetricsMap {
-		if metrics.BlocksContributed > 0 {
-			healthy = append(healthy, enode)
-		}
-	}
-	return healthy
-}
-
 func (p *peerEvalModule) removePeers(peers []string) {
 	for _, id := range peers {
 		var result bool
-		if err := sessionPeerService.client.Call(&result, "admin_removePeer", fmt.Sprintf("enode://%s", id)); err != nil {
+		if err := client.Call(&result, "admin_removePeer", fmt.Sprintf("enode://%s", id)); err != nil {
 			log.Error("Failed to remove peer", "id", id, "err", err)
 		} else {
 			log.Info("Removed peer", "id", id)
@@ -270,9 +309,8 @@ func (p *peerEvalModule) removePeers(peers []string) {
 	}
 }
 
-
 var (
-	// _ initialize.Blockchain  = (*peerEvalModule)(nil)
+	_ initialize.Blockchain  = (*peerEvalModule)(nil)
 	_ initialize.Initializer = (*peerEvalModule)(nil)
 	_ fetcher.PeerEvalPlugin = (*peerEvalModule)(nil)
 )
