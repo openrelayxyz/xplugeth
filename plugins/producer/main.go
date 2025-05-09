@@ -38,6 +38,7 @@ import (
 import (
 	"github.com/openrelayxyz/xplugeth/plugins/blockupdates"
 	_ "github.com/openrelayxyz/xplugeth/plugins/peermanager"
+	_ "github.com/openrelayxyz/xplugeth/plugins/peereval"
 )
 
 type cardinalProducerModule struct {
