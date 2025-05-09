@@ -63,6 +63,7 @@ type peerEvalModule struct {
 func init() {
 	xplugeth.RegisterModule[peerEvalModule]("peerEvalModule")
 	xplugeth.RegisterHook[HealthyPeers]()
+	xplugeth.RegisterFlags(flags)
 }
 
 func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
