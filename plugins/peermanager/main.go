@@ -99,6 +99,7 @@ func peeringSequence() {
 			Trusted: selfNode,
 			Generic: nil,
 		}
+		log.Error("sending initial trusted-only peer broadcast", "selfNode", selfNode)
 		data, err := json.Marshal(initialPayload)
 		if err == nil {
 			msg := &sarama.ProducerMessage{
@@ -145,9 +146,11 @@ func peeringSequence() {
 				if incoming.Trusted != "" && incoming.Trusted != selfNode {
 					if !isPeerConnected(incoming.Trusted){
 						sessionPeerService.attachTrustedPeer(incoming.Trusted)
+					}else {
+						log.Error("trusted peer already exists")
 					}
-				}else {
-					log.Error("trusted peer already exists")
+				} else{
+					log.Error("peer either self or empty")
 				}
 
 				for _, peer := range incoming.Generic{
