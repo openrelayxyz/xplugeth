@@ -94,6 +94,20 @@ func peeringSequence() {
 			log.Error("failed to acquire peereval consumer, peer manager plugin", "err", err)
 			return
 		}
+
+		initialPayload := peerBroadcast{
+			Trusted: selfNode,
+			Generic: nil,
+		}
+		data, err := json.Marshal(initialPayload)
+		if err == nil {
+			msg := &sarama.ProducerMessage{
+				Topic: cfg.PeerTopic,
+				Value: sarama.ByteEncoder(data),
+			}
+			producer.Input() <- msg
+		}
+
 		go func() { 
 			for message := range evalConsumer.Messages(){
 				var genericPeers []string
@@ -112,11 +126,11 @@ func peeringSequence() {
 					log.Error("failed to marshal peerBroadcast", "err", err)
 				}
 
-				msg := &sarama.ProducerMessage{
+				peerMsg := &sarama.ProducerMessage{
 					Topic: cfg.PeerTopic,
 					Value : sarama.ByteEncoder(data),
 				}
-				producer.Input() <- msg
+				producer.Input() <- peerMsg
 			}
 		}()
 
