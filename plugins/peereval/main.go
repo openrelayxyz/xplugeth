@@ -84,6 +84,7 @@ func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
 	p.cleanUpPeerMap()
 
 	log.Info("Initialized node, peer eval plugin")
+	log.Info(fmt.Sprintf("Polling interval set to %v minutes", pollingInterval.Minutes()))
 }
 
 func (p *peerEvalModule) Blockchain() {
@@ -147,7 +148,13 @@ func (p *peerEvalModule) PeerEval(id string, headers []*gtypes.Header) {
 func (p *peerEvalModule) StartPeerMonitoring() {
 	ticker := time.NewTicker(*pollingInterval)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error("panic in peer monitoring", "err", r)
+			}
+		}()
 		for range ticker.C {
+			log.Error("peer monitoring tick")
 			p.updatePeerConnections()
 		}
 	}()
