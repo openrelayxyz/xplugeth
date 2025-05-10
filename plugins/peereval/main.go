@@ -77,7 +77,7 @@ func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
 
 	if *maxPeerCount == 0 {
 		*maxPeerCount = 3
-		log.Warn(fmt.Sprintf("max peer count flag not set, peer eval plugin, setting to a default of", *maxPeerCount))
+		log.Warn(fmt.Sprintf("max peer count flag not set, peer eval plugin, setting to a default of %v", *maxPeerCount))
 	}
 	p.peerMetricsMap = make(map[string]*PeerMetrics)
 	p.StartPeerMonitoring()
