@@ -43,8 +43,6 @@ type HealthyPeers interface {
 
 var (
 	blockCount = 0
-	maxPeers   int
-
 	client  *rpc.Client 
 	chainid            int64
 	cfg  *peerEvalConfig
@@ -78,8 +76,8 @@ func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
 	}
 
 	if *maxPeerCount == 0 {
-		log.Warn("max peer count flag not set, peer eval plugin, setting to a default of 20")
-		maxPeers = 20
+		*maxPeerCount = 3
+		log.Warn(fmt.Sprintf("max peer count flag not set, peer eval plugin, setting to a default of", *maxPeerCount))
 	}
 	p.peerMetricsMap = make(map[string]*PeerMetrics)
 	p.StartPeerMonitoring()
@@ -218,7 +216,7 @@ func (p *peerEvalModule) updatePeerConnections() {
 
 	log.Error("length of peerMetricsMap", "length", len(p.peerMetricsMap))
 
-	if len(p.peerMetricsMap) > int(float64(maxPeers)*0.9) {
+	if len(p.peerMetricsMap) > int(float64(*maxPeerCount)*0.9) {
 		p.prunePeers(true)
 	} else {
 		var outboundCount float64
