@@ -180,14 +180,12 @@ func (p *peerEvalModule) updatePeerConnections() {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-    log.Error("calling getPeers")
 	peers, err := getPeers()
 	if err != nil {
 		log.Error("Failed to get peers", "err", err)
 		return
 	}
 
-	log.Error("retrieved peers", "count", len(peers))
     log.Error("length of peerMetricsMap", "length", len(p.peerMetricsMap))
 
 	currentPeers := make(map[string]bool)
@@ -283,7 +281,6 @@ func (p *peerEvalModule) streamHealthyPeers() {
 			Topic : cfg.Topic,
 			Value : sarama.ByteEncoder(data),
 		}
-		log.Error("sending generic peer")
 		producer.Input() <-msg 
 	}
 }

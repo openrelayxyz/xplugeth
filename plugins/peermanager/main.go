@@ -99,7 +99,6 @@ func peeringSequence() {
 			Trusted: selfNode,
 			Generic: nil,
 		}
-		log.Error("sending initial trusted-only peer broadcast", "selfNode", selfNode)
 		data, err := json.Marshal(initialPayload)
 		if err == nil {
 			msg := &sarama.ProducerMessage{
@@ -164,7 +163,6 @@ func peeringSequence() {
 		}()
 
 	} else {
-		log.Error("using default stream in peermanager")
 		msg := &sarama.ProducerMessage{
 			Topic: cfg.PeerTopic,
 			Value: sarama.StringEncoder(selfNode),
