@@ -29,6 +29,7 @@ type peerEvalConfig struct {
 
 type PeerMetrics struct {
 	ID                string
+	Enode             string
 	BlocksContributed int
 	LastConnected     time.Time
 	LastDisconnected  time.Time
@@ -93,6 +94,7 @@ func (p *peerEvalModule) Blockchain() {
 
 type peerInfo struct {
     ID      string
+	Enode   string 
     Inbound bool
 }
 
@@ -107,11 +109,14 @@ func getPeers() ([]peerInfo, error) {
 	peers := []peerInfo{}
 
 	for _, item := range rawPeerData {
-		var id string
+		var id, enode string
 		var inbound bool
 		for k, v := range item {
 			if k == "id" {
 				id = v.(string)
+			}
+			if k == "enode" {
+				enode = v.(string)
 			}
 			if k == "network" {
 				network := v.(map[string]interface{})
@@ -122,6 +127,7 @@ func getPeers() ([]peerInfo, error) {
 		if id != ""{
 			peers = append(peers, peerInfo{
 				ID: id,
+				Enode: enode,
 				Inbound: inbound,
 			})
 		}
@@ -150,7 +156,6 @@ func (p *peerEvalModule) StartPeerMonitoring() {
 	go func() {
 		
 		for range ticker.C {
-			log.Error("peer monitoring tick")
 			p.updatePeerConnections()
 		}
 	}()
@@ -196,6 +201,7 @@ func (p *peerEvalModule) updatePeerConnections() {
 		if !exists {
 			p.peerMetricsMap[peer.ID] = &PeerMetrics{
 				ID:            peer.ID,
+				Enode: 		   peer.Enode,
 				IsConnected:   true,
 				LastConnected: time.Now(),
 				IsInbound:     peer.Inbound,
@@ -204,6 +210,7 @@ func (p *peerEvalModule) updatePeerConnections() {
 			peerMetric.IsConnected = true
 			peerMetric.LastConnected = time.Now()
 			peerMetric.IsInbound = peer.Inbound
+			peerMetric.Enode = peer.Enode
 		}
 	}
 
@@ -246,9 +253,9 @@ func (p *peerEvalModule) GetHealthyPeers() []string{
 	defer p.mutex.Unlock()
 
 	var healthy []string
-	for enode, metrics := range p.peerMetricsMap {
-		if metrics.BlocksContributed > 0 {
-			healthy = append(healthy, enode)
+	for _, metrics := range p.peerMetricsMap {
+		if metrics.BlocksContributed > 0 && metrics.Enode != "" {
+			healthy = append(healthy, metrics.Enode)
 		}
 	}
 	return healthy
@@ -307,11 +314,15 @@ func (p *peerEvalModule) prunePeers(pruneAll bool){
 
 func (p *peerEvalModule) removePeers(peers []string) {
 	for _, id := range peers {
+		metrics, ok := p.peerMetricsMap[id]
+		if !ok || metrics.Enode == "" {
+			continue
+		}
 		var result bool
-		if err := client.Call(&result, "admin_removePeer", fmt.Sprintf("enode://%s", id)); err != nil {
-			log.Error("Failed to remove peer", "id", id, "err", err)
+		if err := client.Call(&result, "admin_removePeer", metrics.Enode ); err != nil {
+			log.Error("Failed to remove peer", "enode", metrics.Enode, "err", err)
 		} else {
-			log.Info("Removed peer", "id", id)
+			log.Info("Removed peer", "enode", metrics.Enode)
 			delete(p.peerMetricsMap, id)
 		}
 	}

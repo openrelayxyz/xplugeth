@@ -59,7 +59,9 @@ func (service *PeerManager) attachPeerOnly(peer string) {
 	if !addPeerResult {
 		log.Error("addPeer returned false, attachPeerOnly, peermanager plugin", "peer", peer)
 	}
-	log.Info("added generic peer, attachPeerOnly, peer manager plugin", "peer", peer)
+	if err == nil && addPeerResult {
+		log.Info("added generic peer, attachPeerOnly, peer manager plugin", "peer", peer)
+	}
 }
 
 type myIp struct {
