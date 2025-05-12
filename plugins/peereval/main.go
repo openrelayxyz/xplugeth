@@ -148,11 +148,7 @@ func (p *peerEvalModule) PeerEval(id string, headers []*gtypes.Header) {
 func (p *peerEvalModule) StartPeerMonitoring() {
 	ticker := time.NewTicker(*pollingInterval)
 	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error("panic in peer monitoring", "err", r)
-			}
-		}()
+		
 		for range ticker.C {
 			log.Error("peer monitoring tick")
 			p.updatePeerConnections()
@@ -175,14 +171,24 @@ func (p *peerEvalModule) cleanUpPeerMap() {
 }
 
 func (p *peerEvalModule) updatePeerConnections() {
+	defer func() {
+		if r := recover(); r != nil {
+				log.Error("panic in updatePeerConnections", "panic", r)
+		}
+	}()
+	log.Error("inside update peerconnections")
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
+    log.Error("calling getPeers")
 	peers, err := getPeers()
 	if err != nil {
 		log.Error("Failed to get peers", "err", err)
 		return
 	}
+
+	log.Error("retrieved peers", "count", len(peers))
+    log.Error("length of peerMetricsMap", "length", len(p.peerMetricsMap))
 
 	currentPeers := make(map[string]bool)
 	for _, peer := range peers {
@@ -220,8 +226,6 @@ func (p *peerEvalModule) updatePeerConnections() {
 			}
 		}
 	}
-
-	log.Error("length of peerMetricsMap", "length", len(p.peerMetricsMap))
 
 	if len(p.peerMetricsMap) > int(float64(*maxPeerCount)*0.9) {
 		p.prunePeers(true)
@@ -263,10 +267,8 @@ func (p *peerEvalModule) streamHealthyPeers() {
 	}
 
 	for range ticker.C {
-		p.mutex.Lock()
 		peers := p.GetHealthyPeers()
 		log.Error("len of healthyPeers", "length", len(peers))
-		p.mutex.Unlock()
 
 		if len(peers) == 0 {
 			continue
