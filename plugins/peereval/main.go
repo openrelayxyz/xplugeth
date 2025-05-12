@@ -176,11 +176,6 @@ func (p *peerEvalModule) cleanUpPeerMap() {
 }
 
 func (p *peerEvalModule) updatePeerConnections() {
-	defer func() {
-		if r := recover(); r != nil {
-				log.Error("panic in updatePeerConnections", "panic", r)
-		}
-	}()
 	log.Error("inside update peerconnections")
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -265,6 +260,8 @@ func (p *peerEvalModule) streamHealthyPeers() {
 	ticker := time.NewTicker(*pollingInterval)
 	defer ticker.Stop()
 
+	time.Sleep(*pollingInterval)
+
 	producer, err := utils.CreateProducer(cfg.BrokerURL, cfg.Topic)
 	if err != nil {
 		log.Error("failed to create Kafka producer", "err", err)
@@ -288,6 +285,7 @@ func (p *peerEvalModule) streamHealthyPeers() {
 			Topic : cfg.Topic,
 			Value : sarama.ByteEncoder(data),
 		}
+		log.Error("sending getHealthyPeers")
 		producer.Input() <-msg 
 	}
 }
