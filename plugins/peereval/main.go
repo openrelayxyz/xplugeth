@@ -256,10 +256,8 @@ func (p *peerEvalModule) GetHealthyPeers() []string{
 }
 
 func (p *peerEvalModule) streamHealthyPeers() {
-	ticker := time.NewTicker(*pollingInterval)
+	ticker := time.NewTicker(4 * time.Minute)
 	defer ticker.Stop()
-
-	time.Sleep(*pollingInterval)
 
 	producer, err := utils.CreateProducer(cfg.BrokerURL, cfg.Topic)
 	if err != nil {
