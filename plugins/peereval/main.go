@@ -22,6 +22,10 @@ import (
 	"github.com/openrelayxyz/xplugeth/utils"
 )
 
+import (
+	_ "github.com/openrelayxyz/xplugeth/plugins/peermanager"
+)
+
 type peerEvalConfig struct {
 	BrokerURL string `yaml:"broker.url"`
 	Topic string `yaml:"topic"`

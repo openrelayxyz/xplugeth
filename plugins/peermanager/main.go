@@ -56,7 +56,7 @@ func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
 	if !ok {
 		cfg = &peerManagerConfig{}
-		log.Warn("did not acqire config, example plugin, all values set to default")
+		log.Warn("did not acqire config, peermanager plugin, all values set to default")
 	}
 
 	log.Info("Initialized node, peer manager plugin")
