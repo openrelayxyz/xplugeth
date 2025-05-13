@@ -143,6 +143,7 @@ func peeringSequence() {
 				}
 
 				if incoming.Trusted != "" && incoming.Trusted != selfNode {
+					log.Error("received trusted", "peer", incoming.Trusted)
 					if !isPeerConnected(incoming.Trusted){
 						sessionPeerService.attachTrustedPeer(incoming.Trusted)
 					}else {
@@ -153,6 +154,7 @@ func peeringSequence() {
 				}
 
 				for _, peer := range incoming.Generic{
+					log.Error("received generic", "peer", incoming.Trusted)
 					if peer != selfNode && !isPeerConnected(peer){
 						sessionPeerService.attachPeerOnly(peer)
 					} else {
