@@ -29,7 +29,7 @@ func (service *PeerManager) getEnode() (string, error) {
 	return analyzeEnode(pni.Enode), nil
 }
 
-func (service *PeerManager) attachPeers(peer string) {
+func (service *PeerManager) attachTrustedPeer(peer string) {
 	var addTrustedPeerResult bool
 	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
 	if err != nil {
@@ -47,19 +47,22 @@ func (service *PeerManager) attachPeers(peer string) {
 	if !addPeerResult {
 		log.Error("addPeer returned false, peer manager plugin", "peer", peer, "err", err)
 	}
-	log.Info("added peer, peer manager plugin", "added", peer)
+	if addPeerResult && addTrustedPeerResult {
+		log.Info("added trusted peer, peer manager plugin", "peer", peer)
+	}
 }
 
 func (service *PeerManager) attachPeerOnly(peer string) {
 	var addPeerResult bool
 	err := service.client.Call(&addPeerResult, "admin_addPeer", peer)
 	if err != nil {
-		log.Error("error calling admin_addPeer, peer manager plugin", "peer", peer, "err", err)
+		log.Error("error calling admin_addPeer, attachPeerOnly, peermanager plugin", "peer", peer, "err", err)
 	}
 	if !addPeerResult {
-		log.Error("addPeer returned false, peer manager plugin", "peer", peer)
+		log.Error("addPeer returned false, attachPeerOnly, peermanager plugin", "peer", peer)
+	} else {
+		log.Info("added generic peer, attachPeerOnly, peer manager plugin", "peer", peer)
 	}
-	log.Info("added generic peer, peer manager plugin", "peer", peer)
 }
 
 type myIp struct {
