@@ -146,7 +146,7 @@ func peeringSequence() {
 					if !isPeerConnected(incoming.Trusted) && incoming.Trusted != selfNode {
 						sessionPeerService.attachTrustedPeer(incoming.Trusted)
 					}else {
-						log.Error("skipping trusted cause it already exists")
+						log.Error("skipping trusted cause it already exists", "peer", incoming.Trusted)
 					}
 				} 
 
