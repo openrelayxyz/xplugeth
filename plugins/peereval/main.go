@@ -176,7 +176,6 @@ func (p *peerEvalModule) cleanUpPeerMap() {
 }
 
 func (p *peerEvalModule) updatePeerConnections() {
-	log.Error("inside update peerconnections")
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -270,12 +269,9 @@ func (p *peerEvalModule) streamHealthyPeers() {
 
 	for range ticker.C {
 		peers := p.GetHealthyPeers()
-		log.Error("len of healthyPeers", "length", len(peers))
-
 		if len(peers) == 0 {
 			continue
 		}
-
 		data, err := json.Marshal(peers)
 		if err != nil {
 			log.Error("failed to marshal healthy peers", "err", err)
@@ -285,7 +281,7 @@ func (p *peerEvalModule) streamHealthyPeers() {
 			Topic : cfg.Topic,
 			Value : sarama.ByteEncoder(data),
 		}
-		log.Error("sending getHealthyPeers")
+		log.Error("sending getHealthyPeers", "length", len(peers))
 		producer.Input() <-msg 
 	}
 }

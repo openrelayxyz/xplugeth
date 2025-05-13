@@ -47,7 +47,9 @@ func (service *PeerManager) attachTrustedPeer(peer string) {
 	if !addPeerResult {
 		log.Error("addPeer returned false, peer manager plugin", "peer", peer, "err", err)
 	}
-	log.Info("added peer, peer manager plugin", "added", peer)
+	if addPeerResult && addTrustedPeerResult {
+		log.Info("added trusted peer, peer manager plugin", "peer", peer)
+	}
 }
 
 func (service *PeerManager) attachPeerOnly(peer string) {
@@ -58,8 +60,7 @@ func (service *PeerManager) attachPeerOnly(peer string) {
 	}
 	if !addPeerResult {
 		log.Error("addPeer returned false, attachPeerOnly, peermanager plugin", "peer", peer)
-	}
-	if err == nil && addPeerResult {
+	} else {
 		log.Info("added generic peer, attachPeerOnly, peer manager plugin", "peer", peer)
 	}
 }
