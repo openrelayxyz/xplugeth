@@ -1,17 +1,6 @@
 package plugins
 
 import (
-	// "encoding/json"
-	// "errors"
-	// "fmt"
-	// "math/big"
-	// "strings"
-
-	// "github.com/openrelayxyz/xplugeth"
-
-	// "github.com/ethereum/go-ethereum/common"
-	// "github.com/ethereum/go-ethereum/common/hexutil"
-	// "github.com/ethereum/go-ethereum/node"
 
 	"github.com/Shopify/sarama"
 	"github.com/openrelayxyz/cardinal-streams/transports"
