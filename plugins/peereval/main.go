@@ -3,7 +3,6 @@ package peereval
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -48,14 +47,14 @@ var (
 	chainid            int64
 	cfg  *peerEvalConfig
 	flags                     = *flag.NewFlagSet("peereval-plugin", flag.ContinueOnError)
-	maxPeerCount              = flags.Int("peereval.max.peers", 0, "max peer value for peer eval plugin")
+	maxPeerCount              = flags.Int("peereval.max.peers", 10, "max peer value for peer eval plugin")
 	pollingInterval           = flags.Duration("peereval.polling.interval", time.Minute, "polling interval for peer monitoring")
 	connectionTimeCoefficient = flags.Duration("peereval.connection.time.coefficient", 5*time.Minute, "minimum connection time before evaluating peers")
 )
 
 type peerEvalModule struct {
 	peerMetricsMap map[string]*PeerMetrics
-	mutex          sync.Mutex
+	mutex          sync.RWMutex
 	peerRatios     map[string]float64
 }
 
@@ -76,16 +75,11 @@ func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
 		cfg = config
 	}
 
-	if *maxPeerCount == 0 {
-		*maxPeerCount = 3
-		log.Warn(fmt.Sprintf("max peer count flag not set, peer eval plugin, setting to a default of %v", *maxPeerCount))
-	}
 	p.peerMetricsMap = make(map[string]*PeerMetrics)
 	p.StartPeerMonitoring()
 	p.cleanUpPeerMap()
 
 	log.Info("Initialized node, peer eval plugin")
-	log.Info(fmt.Sprintf("Polling interval set to %v minutes", pollingInterval.Minutes()))
 }
 
 func (p *peerEvalModule) Blockchain() {
@@ -93,9 +87,9 @@ func (p *peerEvalModule) Blockchain() {
 }
 
 type peerInfo struct {
-    ID      string
-	Enode   string 
-    Inbound bool
+	ID string
+	Enode string
+	Inbound bool
 }
 
 func getPeers() ([]peerInfo, error) {
@@ -137,6 +131,9 @@ func getPeers() ([]peerInfo, error) {
 }
 
 func (p *peerEvalModule) PeerEval(id string, headers []*gtypes.Header) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
 	blockCount += len(headers)
 
 	if _, exists := p.peerMetricsMap[id]; !exists {
@@ -165,29 +162,28 @@ func (p *peerEvalModule) cleanUpPeerMap() {
 	ticker := time.NewTicker(*pollingInterval)
 	go func() {
 		for range ticker.C {
+			p.mutex.Lock()
 			for id, peer := range p.peerMetricsMap {
 				connectedDuration := peer.ConnectedTime + time.Since(peer.LastConnected)
 				if !peer.IsConnected && connectedDuration >= *connectionTimeCoefficient {
 					delete(p.peerMetricsMap, id)
 				}
 			}
+			p.mutex.Unlock()
 		}
 	}()
 }
 
 func (p *peerEvalModule) updatePeerConnections() {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-
 	peers, err := getPeers()
 	if err != nil {
 		log.Error("Failed to get peers", "err", err)
 		return
 	}
 
-    log.Error("length of peerMetricsMap", "length", len(p.peerMetricsMap))
-
 	currentPeers := make(map[string]bool)
+
+	p.mutex.Lock()
 	for _, peer := range peers {
 		currentPeers[peer.ID] = true
 
@@ -207,7 +203,7 @@ func (p *peerEvalModule) updatePeerConnections() {
 			peerMetric.Enode = peer.Enode
 		}
 	}
-
+	
 	for id, peerMetric := range p.peerMetricsMap {
 		if !currentPeers[id] && peerMetric.IsConnected {
 			peerMetric.IsConnected = false
@@ -215,7 +211,9 @@ func (p *peerEvalModule) updatePeerConnections() {
 			peerMetric.ConnectedTime += peerMetric.LastDisconnected.Sub(peerMetric.LastConnected)
 		}
 	}
+	p.mutex.Unlock()
 
+	p.mutex.Lock()
 	p.peerRatios = make(map[string]float64)
 		for id, peer := range p.peerMetricsMap {
 			if peer.IsConnected {
@@ -225,26 +223,29 @@ func (p *peerEvalModule) updatePeerConnections() {
 			}
 		}
 	}
+	p.mutex.Unlock()
 
-	if len(p.peerMetricsMap) > int(float64(*maxPeerCount)*0.9) {
+	p.mutex.RLock()
+	peerCount := len(p.peerMetricsMap)
+	outboundCount := 0
+
+	for _, peer := range p.peerMetricsMap{
+		if !peer.IsInbound{
+			outboundCount++
+		}
+	}
+	p.mutex.RUnlock()
+
+	if peerCount > int(float64(*maxPeerCount)*0.9) {
 		p.prunePeers(true)
-	} else {
-		var outboundCount float64
-		for _, peer := range p.peerMetricsMap{
-			if !peer.IsInbound{
-				outboundCount++
-			}
-		}
-
-		if outboundCount >= float64(len(p.peerMetricsMap)) * 0.9 {
+	} else if float64(outboundCount) >= float64(peerCount) * 0.9 {
 			p.prunePeers(false)
-		}
 	}
 }
 
 func (p *peerEvalModule) GetHealthyPeers() []string{
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
 
 	var healthy []string
 	for _, metrics := range p.peerMetricsMap {
@@ -289,11 +290,15 @@ func (p *peerEvalModule) prunePeers(pruneAll bool){
 		return
 	}
 	var peersToDrop []string
+
+	p.mutex.RLock()
 	for id, peer := range p.peerMetricsMap {
 		if pruneAll || !peer.IsInbound {
 			peersToDrop = append(peersToDrop, id)
 		}
 	}
+	p.mutex.RUnlock()
+
 	dropCount := int(0.1 * float64(len(peersToDrop)))
 	if dropCount == 0 {
 		return
@@ -305,6 +310,9 @@ func (p *peerEvalModule) prunePeers(pruneAll bool){
 }
 
 func (p *peerEvalModule) removePeers(peers []string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	
 	for _, id := range peers {
 		metrics, ok := p.peerMetricsMap[id]
 		if !ok || metrics.Enode == "" {

@@ -3,6 +3,7 @@ package peermanager
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"encoding/json"
 
@@ -118,6 +119,7 @@ func peeringSequence() {
 				}
 				
 				payload := &peerBroadcast{
+					Trusted: selfNode,
 					Generic: genericPeers,
 				}
 
@@ -142,45 +144,60 @@ func peeringSequence() {
 					continue
 				}
 
-				if incoming.Trusted != "" {
-					if !isPeerConnected(incoming.Trusted) && incoming.Trusted != selfNode {
+				if incoming.Trusted != "" && incoming.Trusted != selfNode {
+					if !isPeerConnected(incoming.Trusted){
 						sessionPeerService.attachTrustedPeer(incoming.Trusted)
-					}else {
-						log.Error("skipping trusted cause it already exists", "peer", incoming.Trusted)
 					}
 				} 
 
 				for _, peer := range incoming.Generic{
 					if peer != selfNode && !isPeerConnected(peer){
 						sessionPeerService.attachPeerOnly(peer)
-					} else {
-						log.Error("skipping generic cause it already exists")
 					}
 				}
 			}
 		}()
 
 	} else {
-		msg := &sarama.ProducerMessage{
-			Topic: cfg.PeerTopic,
-			Value: sarama.StringEncoder(selfNode),
-		}
-		producer.Input() <- msg
+		go func ()  {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+
+			for range ticker.C {
+				payload := &peerBroadcast{
+					Trusted: selfNode,
+					Generic: nil,
+				}
+				data, err := json.Marshal(payload)
+				if err != nil {
+					log.Error("failed to marshal peerBroadcast, default peermanager", "err", err)
+					continue
+				}
+
+				msg := &sarama.ProducerMessage{
+					Topic: cfg.PeerTopic,
+					Value: sarama.ByteEncoder(data),
+				}
+				producer.Input() <- msg
+			}	
+		}()
 
 		go func() {
 			for message := range consumer.Messages() {
-				nodes <- string(message.Value)
+				var incoming peerBroadcast
+				if err := json.Unmarshal(message.Value, &incoming); err != nil {
+					log.Error("failed to unmarshal peer broadcast", "err", err)
+					continue
+				}
+
+				if incoming.Trusted != "" && incoming.Trusted != selfNode {
+					if !isPeerConnected(incoming.Trusted) {
+						sessionPeerService.attachTrustedPeer(incoming.Trusted)
+					}
+				}
+
 			}
 		}()
-
-		for message := range nodes {
-			if message == selfNode {
-				log.Error("received own node message", "node", selfNode)
-				continue
-			} else {
-				sessionPeerService.attachTrustedPeer(message)
-			}
-		}
 	}
 }
 
