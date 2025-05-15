@@ -2,6 +2,8 @@ package plugins
 
 import (
 
+	"fmt"
+	"strings"
 	"github.com/Shopify/sarama"
 	"github.com/openrelayxyz/cardinal-streams/transports"
 )
