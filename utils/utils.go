@@ -5,16 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/openrelayxyz/xplugeth"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/node"
-
-	"github.com/Shopify/sarama"
-	"github.com/openrelayxyz/cardinal-streams/transports"
 )
 
 func GetChainID() (int64, bool) {
@@ -63,44 +59,4 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	return result, nil
 }
 
-func Ptr[T any](x T) *T {
-	return &x
-}
 
-var (
-	brokers            []string
-	config             *sarama.Config
-)
-
-func CreateProducer(broker, topic string) (sarama.AsyncProducer, error) {
-
-	brokers, config = transports.ParseKafkaURL(strings.TrimPrefix(broker, "kafka://"))
-	configEntries := make(map[string]*string)
-	configEntries["retention.ms"] = Ptr("1800000")
-
-	if err := transports.CreateTopicIfDoesNotExist(strings.TrimPrefix(broker, "kafka://"), topic, 1, configEntries); err != nil {
-		panic(fmt.Sprintf("Could not create topic %v on broker %v: %v", topic, broker, err.Error()))
-	}
-
-	producer, err := sarama.NewAsyncProducer(brokers, config)
-	if err != nil {
-		panic(fmt.Sprintf("Could not setup producer, peer manager plugin: %v", err.Error()))
-	}
-
-	return producer, nil
-}
-
-func CreateConsumer(broker, topic string) (sarama.PartitionConsumer, error) {
-
-	consumer, err := sarama.NewConsumer(brokers, config)
-	if err != nil {
-		return nil, err
-	}
-
-	partitionConsumer, err := consumer.ConsumePartition(topic, 0, sarama.OffsetNewest)
-	if err != nil {
-		return nil, err
-	}
-
-	return partitionConsumer, nil
-}

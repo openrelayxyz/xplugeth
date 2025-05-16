@@ -14,7 +14,7 @@ import (
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
-	"github.com/openrelayxyz/xplugeth/utils"
+	xp-utils "github.com/openrelayxyz/xplugeth/utils"
 )
 
 type peerBroadcast struct {
@@ -57,7 +57,7 @@ func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
 	if !ok {
 		cfg = &peerManagerConfig{}
-		log.Warn("did not acqire config, example plugin, all values set to default")
+		log.Warn("did not acqire config, peermanager plugin, all values set to default")
 	}
 
 	log.Info("Initialized node, peer manager plugin")
@@ -76,21 +76,21 @@ func peeringSequence() {
 		log.Error("error calling getEnode from sessionService, peer manager plugin", "err", err)
 	}
 
-	producer, err :=  utils.CreateProducer(cfg.BrokerURL, cfg.PeerTopic)
+	producer, err :=  xp-utils.CreateProducer(cfg.BrokerURL, cfg.PeerTopic)
 	if err != nil {
 		log.Error("failed to acquire kafka producer, peer manager plugin", "err", err)
 		return
 	}
 
-	consumer, err := utils.CreateConsumer(cfg.BrokerURL, cfg.PeerTopic)
+	consumer, err := xp-utils.CreateConsumer(cfg.BrokerURL, cfg.PeerTopic)
 	if err != nil {
 		log.Error("failed to acquire kafka consumer, peer manager plugin", "err", err)
 		return
 	}
 
 	if xplugeth.HasModule("peerEvalModule") {
-		log.Error("peereval module present")
-		evalConsumer, err := utils.CreateConsumer(cfg.BrokerURL, cfg.EvalTopic)
+		log.Info("peereval module present")
+		evalConsumer, err := xp-utils.CreateConsumer(cfg.BrokerURL, cfg.EvalTopic)
 		if err != nil {
 			log.Error("failed to acquire peereval consumer, peer manager plugin", "err", err)
 			return
@@ -106,7 +106,7 @@ func peeringSequence() {
 				Topic: cfg.PeerTopic,
 				Value: sarama.ByteEncoder(data),
 			}
-			log.Error("sending initial message", "enode", string(data))
+			log.Info("sending initial message", "enode", string(data))
 			producer.Input() <- msg
 		}
 
