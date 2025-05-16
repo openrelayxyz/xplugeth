@@ -14,7 +14,7 @@ import (
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
-	xp-utils "github.com/openrelayxyz/xplugeth/utils"
+	xp-utils "github.com/openrelayxyz/xplugeth/utils/plugins"
 )
 
 type peerBroadcast struct {
