@@ -18,7 +18,7 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/fetcher"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
-	xp-utils "github.com/openrelayxyz/xplugeth/utils/plugins"
+	xp_utils "github.com/openrelayxyz/xplugeth/utils/plugins"
 )
 
 import (
@@ -264,7 +264,7 @@ func (p *peerEvalModule) streamHealthyPeers() {
 	ticker := time.NewTicker(4 * time.Minute)
 	defer ticker.Stop()
 
-	producer, err := xp-utils.CreateProducer(cfg.BrokerURL, cfg.Topic)
+	producer, err := xp_utils.CreateProducer(cfg.BrokerURL, cfg.Topic)
 	if err != nil {
 		log.Error("failed to create Kafka producer", "err", err)
 		return
