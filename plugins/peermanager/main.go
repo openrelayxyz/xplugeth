@@ -14,6 +14,7 @@ import (
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
+	"github.com/openrelayxyz/xplugeth/utils"
 	xp_utils "github.com/openrelayxyz/xplugeth/utils/plugins"
 )
 
