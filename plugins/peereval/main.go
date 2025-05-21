@@ -58,11 +58,17 @@ func init() {
 }
 
 func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
-	
-	if peermanager.SharedBroker == nil {
-		log.Warn("peer evaluation sequence not available")
-	} else {
-		client =  s.Attach()
+	client =  s.Attach()
+		
+	p.peerMetricsMap = make(map[string]*PeerMetrics)
+	p.StartPeerMonitoring()
+	p.cleanUpPeerMap()
+		
+	log.Info("Initialized node, peer eval plugin")
+}
+
+func (p *peerEvalModule) Blockchain () {
+	if peermanager.SharedBroker != nil {
 		broker = *peermanager.SharedBroker
 		topic = *peermanager.SharedTopic
 		producer, err := xp_utils.CreateProducer(broker, topic)
@@ -71,15 +77,13 @@ func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
 			return
 		}
 		p.producer = producer
-		p.peerMetricsMap = make(map[string]*PeerMetrics)
-		p.StartPeerMonitoring()
-		p.cleanUpPeerMap()
-		
 		go p.streamHealthyPeers()
+	} else {
+		log.Warn("peer evaluation sequence not available")
 	}
-	
-	log.Info("Initialized node, peer eval plugin")
 }
+
+
 
 type peerInfo struct {
 	ID string

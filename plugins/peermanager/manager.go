@@ -29,11 +29,11 @@ func (service *PeerManager) getEnode() (string, error) {
 }
 
 func (service *PeerManager) attachTrustedPeer(peer string) error {
-	if err := service.attachPeer(peer); err != nil {
-		return err
-	}
 	var result bool
 	if err := service.client.Call(&result, "admin_addTrustedPeer", peer); err != nil {
+		return err
+	}
+	if err := service.attachPeer(peer); err != nil {
 		return err
 	}
 	return nil
