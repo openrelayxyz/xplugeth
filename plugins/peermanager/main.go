@@ -106,6 +106,7 @@ func peeringSequence() {
 				Value: sarama.ByteEncoder(data),
 			}
 			producer.Input() <- msg
+			log.Error("broadcast self node", "enode", selfNode)
 		}	
 	}()
 
@@ -120,12 +121,14 @@ func peeringSequence() {
 				if err := sessionPeerService.attachTrustedPeer(incoming.peers[0]); err != nil {
 					log.Error("error attaching trusted peer, peermanager", "trusted peer", incoming.peers[0], "err", err)
 				}
+				log.Error("**** Added trusted peer ****", "peer", incoming.peers[0])
 			}
 			for _, peer := range incoming.peers[1:] {
 				if !isPeerConnected(peer) {
 					if err := sessionPeerService.attachPeer(peer); err != nil {
 						log.Error("error attaching generic peer, peermanager", "peer", peer, "err", err)
 					}
+					log.Error("**** Added generic peer ****", "peer", peer)
 				}
 			}
 		}
