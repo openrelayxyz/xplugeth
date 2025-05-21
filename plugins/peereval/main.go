@@ -19,16 +19,8 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
 	xp_utils "github.com/openrelayxyz/xplugeth/utils/plugins"
+	"github.com/openrelayxyz/xplugeth/plugins/peermanager"
 )
-
-import (
-	_ "github.com/openrelayxyz/xplugeth/plugins/peermanager"
-)
-
-type peerEvalConfig struct {
-	BrokerURL string `yaml:"broker.url"`
-	Topic string `yaml:"topic"`
-}
 
 type PeerMetrics struct {
 	ID                string
@@ -41,15 +33,12 @@ type PeerMetrics struct {
 	IsInbound 		  bool 
 }
 
-type HealthyPeers interface {
-	GetHealthyPeers() []string
-}
-
 var (
-	blockCount = 0
+	blockCount int
 	client  *rpc.Client 
-	chainid            int64
-	cfg  *peerEvalConfig
+	chainid int64
+	broker string
+	topic string
 	flags                     = *flag.NewFlagSet("peereval-plugin", flag.ContinueOnError)
 	maxPeerCount              = flags.Int("peereval.max.peers", 10, "max peer value for peer eval plugin")
 	pollingInterval           = flags.Duration("peereval.polling.interval", time.Minute, "polling interval for peer monitoring")
@@ -60,34 +49,36 @@ type peerEvalModule struct {
 	peerMetricsMap map[string]*PeerMetrics
 	mutex          sync.RWMutex
 	peerRatios     map[string]float64
+	producer       sarama.AsyncProducer
 }
 
 func init() {
 	xplugeth.RegisterModule[peerEvalModule]("peerEvalModule")
-	xplugeth.RegisterHook[HealthyPeers]()
 	xplugeth.RegisterFlags(flags)
 }
 
 func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
-	client =  s.Attach()
-
-	config, ok := xplugeth.GetConfig[peerEvalConfig]("peereval")
-	if !ok {
-		log.Warn("peerEval config not found, using defaults")
-		cfg = &peerEvalConfig{}
+	
+	if peermanager.SharedBroker == nil {
+		log.Warn("peer evaluation sequence not available")
 	} else {
-		cfg = config
+		client =  s.Attach()
+		broker = *peermanager.SharedBroker
+		topic = *peermanager.SharedTopic
+		producer, err := xp_utils.CreateProducer(broker, topic)
+		if err != nil {
+			log.Error("failed to create Kafka producer", "err", err)
+			return
+		}
+		p.producer = producer
+		p.peerMetricsMap = make(map[string]*PeerMetrics)
+		p.StartPeerMonitoring()
+		p.cleanUpPeerMap()
+		
+		go p.streamHealthyPeers()
 	}
-
-	p.peerMetricsMap = make(map[string]*PeerMetrics)
-	p.StartPeerMonitoring()
-	p.cleanUpPeerMap()
-
+	
 	log.Info("Initialized node, peer eval plugin")
-}
-
-func (p *peerEvalModule) Blockchain() {
-	go p.streamHealthyPeers()
 }
 
 type peerInfo struct {
@@ -247,11 +238,11 @@ func (p *peerEvalModule) updatePeerConnections() {
 	}
 }
 
-func (p *peerEvalModule) GetHealthyPeers() []string{
+func (p *peerEvalModule) getHealthyPeers() []string{
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 
-	var healthy []string
+	healthy := []string{""}
 	for _, metrics := range p.peerMetricsMap {
 		if metrics.BlocksContributed > 0 && metrics.Enode != "" {
 			healthy = append(healthy, metrics.Enode)
@@ -264,14 +255,8 @@ func (p *peerEvalModule) streamHealthyPeers() {
 	ticker := time.NewTicker(4 * time.Minute)
 	defer ticker.Stop()
 
-	producer, err := xp_utils.CreateProducer(cfg.BrokerURL, cfg.Topic)
-	if err != nil {
-		log.Error("failed to create Kafka producer", "err", err)
-		return
-	}
-
 	for range ticker.C {
-		peers := p.GetHealthyPeers()
+		peers := p.getHealthyPeers()
 		if len(peers) == 0 {
 			continue
 		}
@@ -281,11 +266,11 @@ func (p *peerEvalModule) streamHealthyPeers() {
 			continue
 		}
 		msg := &sarama.ProducerMessage{
-			Topic : cfg.Topic,
+			Topic : topic,
 			Value : sarama.ByteEncoder(data),
 		}
-		log.Error("sending getHealthyPeers", "length", len(peers))
-		producer.Input() <-msg 
+		log.Info("sending getHealthyPeers, peerevaluator", "length", len(peers))
+		p.producer.Input() <-msg 
 	}
 }
 
@@ -333,7 +318,6 @@ func (p *peerEvalModule) removePeers(peers []string) {
 }
 
 var (
-	_ initialize.Blockchain  = (*peerEvalModule)(nil)
 	_ initialize.Initializer = (*peerEvalModule)(nil)
 	_ fetcher.PeerEvalPlugin = (*peerEvalModule)(nil)
 )
