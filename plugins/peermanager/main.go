@@ -22,9 +22,9 @@ type peerBroadcast struct {
 	peers []string
 }
 
-type peerManagerConfig struct {
-	brokerURL string `yaml:"broker.url"`
-	peerTopic string `yaml:"peer.topic"`
+type PeerManagerConfig struct {
+	BrokerURL string `yaml:"broker.url"`
+	PeerTopic string `yaml:"peer.topic"`
 }
 
 var (
@@ -32,7 +32,7 @@ var (
 	chainid            int64
 	nodes              = make(chan string, 5)
 	exit               = make(chan struct{}, 1)
-	cfg                *peerManagerConfig
+	cfg                *PeerManagerConfig
 	SharedTopic        *string
 	SharedBroker       *string
 )
@@ -56,13 +56,13 @@ func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, peermanager"))
 	}
 
-	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
+	cfg, ok = xplugeth.GetConfig[PeerManagerConfig]("peermanager")
 	if !ok {
 		log.Warn("did not acqire config, peermanager plugin, peering sequence unavailable")
 		return
 	} else {
-		SharedBroker =  &cfg.brokerURL
-		SharedTopic = &cfg.peerTopic
+		SharedBroker =  &cfg.BrokerURL
+		SharedTopic = &cfg.PeerTopic
 		go peeringSequence()
 	}
 
@@ -75,13 +75,13 @@ func peeringSequence() {
 		log.Error("error calling getEnode from sessionService, peer manager plugin", "err", err)
 	}
 
-	producer, err :=  xp_utils.CreateProducer(cfg.brokerURL, cfg.peerTopic)
+	producer, err :=  xp_utils.CreateProducer(cfg.BrokerURL, cfg.PeerTopic)
 	if err != nil {
 		log.Error("failed to acquire kafka producer, peer manager plugin", "err", err)
 		return
 	}
 
-	consumer, err := xp_utils.CreateConsumer(cfg.brokerURL, cfg.peerTopic)
+	consumer, err := xp_utils.CreateConsumer(cfg.BrokerURL, cfg.PeerTopic)
 	if err != nil {
 		log.Error("failed to acquire kafka consumer, peer manager plugin", "err", err)
 		return
@@ -102,7 +102,7 @@ func peeringSequence() {
 			}
 
 			msg := &sarama.ProducerMessage{
-				Topic: cfg.peerTopic,
+				Topic: cfg.PeerTopic,
 				Value: sarama.ByteEncoder(data),
 			}
 			producer.Input() <- msg
