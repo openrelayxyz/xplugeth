@@ -19,7 +19,7 @@ import (
 )
 
 type peerBroadcast struct {
-	peers []string
+	Peers []string `json:"peers"`
 }
 
 type PeerManagerConfig struct {
@@ -122,16 +122,17 @@ func (p *peerManagerModule) peeringSequence() {
 				log.Error("failed to unmarshal peer broadcast", "err", err)
 				continue
 			}
-			log.Error("we made it here??", "len", len(incoming.peers))
-			if len(incoming.peers) > 0 {
-				if incoming.peers[0] != "" && !isPeerConnected(incoming.peers[0]) {
-					if err := sessionPeerService.attachTrustedPeer(incoming.peers[0]); err != nil {
-						log.Error("error attaching trusted peer, peermanager", "trusted peer", incoming.peers[0], "err", err)
+			log.Error("we made it here??", "len", len(incoming.Peers))
+			if len(incoming.Peers) > 0 {
+				trustedPeer := incoming.Peers[0]
+				if trustedPeer != "" && !p.isPeerConnected(trustedPeer) {
+					if err := sessionPeerService.attachTrustedPeer(trustedPeer); err != nil {
+						log.Error("error attaching trusted peer, peermanager", "trusted peer", trustedPeer, "err", err)
 					}
-					log.Error("**** Added trusted peer ****", "peer", incoming.peers[0])
+					log.Error("**** Added trusted peer ****", "peer", trustedPeer)
 				}
-				for _, peer := range incoming.peers[1:] {
-					if !isPeerConnected(peer) {
+				for _, peer := range incoming.Peers[1:] {
+					if !p.isPeerConnected(peer) {
 						if err := sessionPeerService.attachPeer(peer); err != nil {
 							log.Error("error attaching generic peer, peermanager", "peer", peer, "err", err)
 						}
@@ -145,29 +146,30 @@ func (p *peerManagerModule) peeringSequence() {
 
 func (p *peerManagerModule) broadcastSelfNode() error {
 	payload := &peerBroadcast{
-		peers: []string{p.selfNode},
+		Peers: []string{p.selfNode},
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		log.Error("failed to marshal peerBroadcast, default peermanager", "err", err)
 		return err
-		
 	}
 
 	msg := &sarama.ProducerMessage{
 		Topic: p.cfg.PeerTopic,
 		Value: sarama.ByteEncoder(data),
 	}
-	// var check peerBroadcast
-	// if err := json.Unmarshal(msg, &check); err != nil {
-	// 	log.Error("failed to unmarshal peer broadcast", "err", err)
-	// }
-	log.Error("broadcast self node", "enode", p.selfNode, "msg", msg, "payload", payload)
+
 	p.producer.Input() <- msg
+
+	log.Error("broadcast self node", "enode", p.selfNode)
 	return nil
 }
 
-func isPeerConnected (enode string) bool {
+func (p *peerManagerModule) isPeerConnected (enode string) bool {
+
+	if enode == p.selfNode {
+		return true
+	}
 
 	var peerList []map[string]interface{}
 	err := sessionPeerService.client.Call(&peerList, "admin_peers")
