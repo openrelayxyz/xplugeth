@@ -122,21 +122,20 @@ func (p *peerManagerModule) peeringSequence() {
 				log.Error("failed to unmarshal peer broadcast", "err", err)
 				continue
 			}
-			log.Error("we made it here??", "len", len(incoming.Peers))
 			if len(incoming.Peers) > 0 {
 				trustedPeer := incoming.Peers[0]
 				if trustedPeer != "" && !p.isPeerConnected(trustedPeer) {
 					if err := sessionPeerService.attachTrustedPeer(trustedPeer); err != nil {
 						log.Error("error attaching trusted peer, peermanager", "trusted peer", trustedPeer, "err", err)
 					}
-					log.Error("**** Added trusted peer ****", "peer", trustedPeer)
+					log.Info("Added trusted peer", "peer", trustedPeer)
 				}
 				for _, peer := range incoming.Peers[1:] {
 					if !p.isPeerConnected(peer) {
 						if err := sessionPeerService.attachPeer(peer); err != nil {
 							log.Error("error attaching generic peer, peermanager", "peer", peer, "err", err)
 						}
-						log.Error("**** Added generic peer ****", "peer", peer)
+						log.Info("Added generic peer", "peer", peer)
 					}
 				}
 			}
@@ -161,7 +160,7 @@ func (p *peerManagerModule) broadcastSelfNode() error {
 
 	p.producer.Input() <- msg
 
-	log.Error("broadcast self node", "enode", p.selfNode)
+	log.Info("broadcast self node", "enode", p.selfNode)
 	return nil
 }
 
