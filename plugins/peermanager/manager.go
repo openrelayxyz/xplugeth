@@ -2,7 +2,6 @@ package peermanager
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -29,40 +28,23 @@ func (service *PeerManager) getEnode() (string, error) {
 	return analyzeEnode(pni.Enode), nil
 }
 
-func (service *PeerManager) attachTrustedPeer(peer string) {
-	var addTrustedPeerResult bool
-	err := service.client.Call(&addTrustedPeerResult, "admin_addTrustedPeer", peer)
-	if err != nil {
-		log.Error("error calling admin_addTrustedPeer, peer manager plugin", "peer", peer, "err", err)
+func (service *PeerManager) attachTrustedPeer(peer string) error {
+	var result bool
+	if err := service.client.Call(&result, "admin_addTrustedPeer", peer); err != nil {
+		return err
 	}
-	if !addTrustedPeerResult {
-		log.Error("addTrustedPeer returned false, peer manager plugin", "peer", peer, "err", err)
+	if err := service.attachPeer(peer); err != nil {
+		return err
 	}
-
-	var addPeerResult bool
-	err = service.client.Call(&addPeerResult, "admin_addPeer", peer)
-	if err != nil {
-		log.Error("error calling admin_addPeer, peer manager plugin", "peer", peer, "err", err)
-	}
-	if !addPeerResult {
-		log.Error("addPeer returned false, peer manager plugin", "peer", peer, "err", err)
-	}
-	if addPeerResult && addTrustedPeerResult {
-		log.Info("added trusted peer, peer manager plugin", "peer", peer)
-	}
+	return nil
 }
 
-func (service *PeerManager) attachPeerOnly(peer string) {
-	var addPeerResult bool
-	err := service.client.Call(&addPeerResult, "admin_addPeer", peer)
-	if err != nil {
-		log.Error("error calling admin_addPeer, attachPeerOnly, peermanager plugin", "peer", peer, "err", err)
+func (service *PeerManager) attachPeer(peer string) error {
+	var result bool
+	if err := service.client.Call(&result, "admin_addPeer", peer); err != nil {
+		return err
 	}
-	if !addPeerResult {
-		log.Error("addPeer returned false, attachPeerOnly, peermanager plugin", "peer", peer)
-	} else {
-		log.Info("added generic peer, attachPeerOnly, peer manager plugin", "peer", peer)
-	}
+	return nil
 }
 
 type myIp struct {
@@ -107,28 +89,4 @@ func getPublicIP() string {
 	}
 
 	return myip.IP
-}
-
-func chainIdResolver(id int64) string {
-	var result string
-	switch id {
-	case 1:
-		result = "mainnet"
-	case 61:
-		result = "etc"
-	case 17000:
-		result = "holesky"
-	case 11155111:
-		result = "sepolia"
-	case 137:
-		result = "polygon"
-	case 80001:
-		result = "mumbai"
-	case 80002:
-		result = "amoy"
-	default:
-		log.Warn("unknown chain, chainID could not be resolved, peer manager plugin")
-		result = fmt.Sprintf("%x", id)
-	}
-	return fmt.Sprintf("peers-%v", result)
 }

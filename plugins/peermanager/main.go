@@ -19,13 +19,12 @@ import (
 )
 
 type peerBroadcast struct {
-	Trusted string `json:"trusted"`
-	Generic []string `json:"generic"`
+	Peers []string `json:"peers"`
 }
-type peerManagerConfig struct {
+
+type PeerManagerConfig struct {
 	BrokerURL string `yaml:"broker.url"`
 	PeerTopic string `yaml:"peer.topic"`
-	EvalTopic string `yaml:"eval.topic"`
 }
 
 var (
@@ -33,10 +32,15 @@ var (
 	chainid            int64
 	nodes              = make(chan string, 5)
 	exit               = make(chan struct{}, 1)
-	cfg                *peerManagerConfig
+	SharedTopic        *string
+	SharedBroker       *string
 )
 
 type peerManagerModule struct {
+	producer sarama.AsyncProducer
+	consumer sarama.PartitionConsumer
+	selfNode string
+	cfg      *PeerManagerConfig
 }
 
 func init() {
@@ -55,154 +59,117 @@ func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
 		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, peermanager"))
 	}
 
-	cfg, ok = xplugeth.GetConfig[peerManagerConfig]("peermanager")
+	cfg, ok := xplugeth.GetConfig[PeerManagerConfig]("peermanager")
 	if !ok {
-		cfg = &peerManagerConfig{}
-		log.Warn("did not acqire config, peermanager plugin, all values set to default")
+		log.Warn("did not acqire config, peermanager plugin, peering sequence unavailable")
+		return
+	} else {
+		p.cfg = cfg
+
+		SharedBroker =  &cfg.BrokerURL
+		SharedTopic = &cfg.PeerTopic
+
+		selfNode, err := sessionPeerService.getEnode()
+		if err != nil {
+			log.Error("error calling getEnode from sessionService, peer manager plugin", "err", err)
+			return
+		}
+		p.selfNode = selfNode
+
+		producer, err :=  xp_utils.CreateProducer(cfg.BrokerURL, cfg.PeerTopic)
+		if err != nil {
+			log.Error("failed to acquire kafka producer, peer manager plugin", "err", err)
+			return
+		}
+
+		p.producer = producer
+
+		consumer, err := xp_utils.CreateConsumer(cfg.BrokerURL, cfg.PeerTopic)
+		if err != nil {
+			log.Error("failed to acquire kafka consumer, peer manager plugin", "err", err)
+			return
+		}
+
+		p.consumer = consumer
+
+		go p.peeringSequence()
 	}
 
 	log.Info("Initialized node, peer manager plugin")
 }
 
-func (p *peerManagerModule) Blockchain() {
-	if sessionPeerService == nil {
-		panic(fmt.Sprintf("peer manager is nil, peer manager plugin"))
-	}
-	go peeringSequence()
+func (p *peerManagerModule) peeringSequence() {
+
+	go func ()  {
+		ticker := time.NewTicker(20 * time.Minute)
+		defer ticker.Stop()
+
+		if err := p.broadcastSelfNode(); err != nil {
+			log.Error("failed to broadcase selfnode peermanager", "err", err)
+		}
+
+		for range ticker.C {
+			if err := p.broadcastSelfNode(); err != nil {
+				log.Error("failed to broadcase selfnode peermanager", "err", err)
+			}
+		}	
+	}()
+
+	go func() {
+		for message := range p.consumer.Messages() {
+			var incoming peerBroadcast
+			if err := json.Unmarshal(message.Value, &incoming); err != nil {
+				log.Error("failed to unmarshal peer broadcast", "err", err)
+				continue
+			}
+			if len(incoming.Peers) > 0 {
+				trustedPeer := incoming.Peers[0]
+				if trustedPeer != "" && !p.isPeerConnected(trustedPeer) {
+					if err := sessionPeerService.attachTrustedPeer(trustedPeer); err != nil {
+						log.Error("error attaching trusted peer, peermanager", "trusted peer", trustedPeer, "err", err)
+					}
+					log.Info("Added trusted peer", "peer", trustedPeer)
+				}
+				for _, peer := range incoming.Peers[1:] {
+					if !p.isPeerConnected(peer) {
+						if err := sessionPeerService.attachPeer(peer); err != nil {
+							log.Error("error attaching generic peer, peermanager", "peer", peer, "err", err)
+						}
+						log.Info("Added generic peer", "peer", peer)
+					}
+				}
+			}
+		}
+	}()
 }
 
-func peeringSequence() {
-	selfNode, err := sessionPeerService.getEnode()
+func (p *peerManagerModule) broadcastSelfNode() error {
+	payload := &peerBroadcast{
+		Peers: []string{p.selfNode},
+	}
+	data, err := json.Marshal(payload)
 	if err != nil {
-		log.Error("error calling getEnode from sessionService, peer manager plugin", "err", err)
+		log.Error("failed to marshal peerBroadcast, default peermanager", "err", err)
+		return err
 	}
 
-	producer, err :=  xp_utils.CreateProducer(cfg.BrokerURL, cfg.PeerTopic)
-	if err != nil {
-		log.Error("failed to acquire kafka producer, peer manager plugin", "err", err)
-		return
+	msg := &sarama.ProducerMessage{
+		Topic: p.cfg.PeerTopic,
+		Value: sarama.ByteEncoder(data),
 	}
 
-	consumer, err := xp_utils.CreateConsumer(cfg.BrokerURL, cfg.PeerTopic)
-	if err != nil {
-		log.Error("failed to acquire kafka consumer, peer manager plugin", "err", err)
-		return
-	}
+	p.producer.Input() <- msg
 
-	if xplugeth.HasModule("peerEvalModule") {
-		log.Info("peereval module present")
-		evalConsumer, err := xp_utils.CreateConsumer(cfg.BrokerURL, cfg.EvalTopic)
-		if err != nil {
-			log.Error("failed to acquire peereval consumer, peer manager plugin", "err", err)
-			return
-		}
-
-		initialPayload := peerBroadcast{
-			Trusted: selfNode,
-			Generic: nil,
-		}
-		data, err := json.Marshal(initialPayload)
-		if err == nil {
-			msg := &sarama.ProducerMessage{
-				Topic: cfg.PeerTopic,
-				Value: sarama.ByteEncoder(data),
-			}
-			log.Info("sending initial message", "enode", string(data))
-			producer.Input() <- msg
-		}
-
-		go func() { 
-			for message := range evalConsumer.Messages(){
-				var genericPeers []string
-				if err := json.Unmarshal(message.Value, &genericPeers); err != nil {
-					log.Error("failed to unmarshal peerEval payload", "err", err)
-					continue
-				}
-				
-				payload := &peerBroadcast{
-					Trusted: selfNode,
-					Generic: genericPeers,
-				}
-
-				data, err := json.Marshal(payload);
-				if err != nil {
-					log.Error("failed to marshal peerBroadcast", "err", err)
-				}
-
-				peerMsg := &sarama.ProducerMessage{
-					Topic: cfg.PeerTopic,
-					Value : sarama.ByteEncoder(data),
-				}
-				producer.Input() <- peerMsg
-			}
-		}()
-
-		go func() {
-			for message := range consumer.Messages(){
-				var incoming peerBroadcast
-				if err := json.Unmarshal(message.Value, &incoming); err != nil {
-					log.Error("failed to unmarshal peer broadcast", "err", err)
-					continue
-				}
-
-				if incoming.Trusted != "" && incoming.Trusted != selfNode {
-					if !isPeerConnected(incoming.Trusted){
-						sessionPeerService.attachTrustedPeer(incoming.Trusted)
-					}
-				} 
-
-				for _, peer := range incoming.Generic{
-					if peer != selfNode && !isPeerConnected(peer){
-						sessionPeerService.attachPeerOnly(peer)
-					}
-				}
-			}
-		}()
-
-	} else {
-		go func ()  {
-			ticker := time.NewTicker(24 * time.Hour)
-			defer ticker.Stop()
-
-			for range ticker.C {
-				payload := &peerBroadcast{
-					Trusted: selfNode,
-					Generic: nil,
-				}
-				data, err := json.Marshal(payload)
-				if err != nil {
-					log.Error("failed to marshal peerBroadcast, default peermanager", "err", err)
-					continue
-				}
-
-				msg := &sarama.ProducerMessage{
-					Topic: cfg.PeerTopic,
-					Value: sarama.ByteEncoder(data),
-				}
-				producer.Input() <- msg
-			}	
-		}()
-
-		go func() {
-			for message := range consumer.Messages() {
-				var incoming peerBroadcast
-				if err := json.Unmarshal(message.Value, &incoming); err != nil {
-					log.Error("failed to unmarshal peer broadcast", "err", err)
-					continue
-				}
-
-				if incoming.Trusted != "" && incoming.Trusted != selfNode {
-					if !isPeerConnected(incoming.Trusted) {
-						sessionPeerService.attachTrustedPeer(incoming.Trusted)
-					}
-				}
-
-			}
-		}()
-	}
+	log.Info("broadcast self node", "enode", p.selfNode)
+	return nil
 }
 
-func isPeerConnected (enode string) bool {
+func (p *peerManagerModule) isPeerConnected (enode string) bool {
+
+	if enode == p.selfNode {
+		return true
+	}
+
 	var peerList []map[string]interface{}
 	err := sessionPeerService.client.Call(&peerList, "admin_peers")
 	if err != nil {
@@ -218,6 +185,5 @@ func isPeerConnected (enode string) bool {
 }
 
 var (
-	_ initialize.Blockchain  = (*peerManagerModule)(nil)
 	_ initialize.Initializer = (*peerManagerModule)(nil)
 )
