@@ -1,9 +1,9 @@
 package utils
 
 import (
-	"fmt"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/openrelayxyz/xplugeth"
@@ -58,3 +58,5 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	} 
 	return result, nil
 }
+
+

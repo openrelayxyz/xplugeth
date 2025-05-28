@@ -104,7 +104,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	if !ok {
 		panic(fmt.Sprintf("could not resolve chain id from xplugeth utils, producer"))
 	}
-	
+
 	for _, updater := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
 		blockUpdatesByNumber = updater.BlockUpdatesByNumber
 	}
