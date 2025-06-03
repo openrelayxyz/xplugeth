@@ -46,8 +46,8 @@ var blockchainPatchsets = []xplugeth.Patchset {
 	},
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_bor_blockchain_v1.5.2_2",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/9a923faf4dea704d5d3a3bfbde30a81ba536001c
+		Ref: "hooks_bor_blockchain_v2.1.0-beta3_0",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/91bf0211e5d6f849324f36694392406bb5446b06
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core",
