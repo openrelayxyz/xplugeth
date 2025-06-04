@@ -141,7 +141,7 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements, 
 
 def sshRemoteTransformer(repo):
     # return "git@" + ":".join(repo.split("/", maxsplit=1))
-    return repo + ".git"
+    return "https://" + repo + ".git"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
