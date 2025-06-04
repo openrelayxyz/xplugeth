@@ -307,7 +307,9 @@ func (m *StreamManager) Start() <-chan error {
 					lock.Unlock()
 					return
 				}
+				log.Error("payload status from the agent", "status", fcr.PayloadStatus.Status)
 				if fcr.PayloadStatus.Status == beacon.VALID {
+					log.Error("Inside condition", "status", fcr.PayloadStatus.Status)
 					m.processed += processed
 				}				
 			}
