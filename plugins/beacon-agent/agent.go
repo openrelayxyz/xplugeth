@@ -186,6 +186,7 @@ func (m *StreamManager) Start() <-chan error {
 				added := update.Added()
 				var latestHash, safeHash, finalHash common.Hash
 				for _, pb := range added {
+					log.Error("inside of pb for loop")
 					var params beacon.ExecutableData
 					if err := rlp.DecodeBytes(pb.Values[fmt.Sprintf("b/%x/b/%x/h", m.chainid, pb.Hash.Bytes())], &params); err != nil {
 						log.Warn("Failed to rlp Decode block", "number", pb.Number, "err", err)
@@ -195,16 +196,20 @@ func (m *StreamManager) Start() <-chan error {
 					versionedHashesMap := make(map[int]common.Hash)
 					executionRequestsMap := make(map[int][]byte)
 					for k, v := range pb.Values {
+						log.Error("inside of the pb.Values range")
 						switch {
 						case txRegexp.MatchString(k):
+							log.Error("inside txRegexp case")
 							parts := txRegexp.FindSubmatch([]byte(k))
 							txIndex, _ := strconv.ParseInt(string(parts[1]), 16, 64)
 							txs[int(txIndex)] = v
 						case vhRegexp.MatchString(k):
+							log.Error("inside vhRegexp case")
 							parts := vhRegexp.FindSubmatch([]byte(k))
 							idx, _ := strconv.ParseInt(string(parts[1]), 16, 64)
 							versionedHashesMap[int(idx)] = common.BytesToHash(v)
 						case erRegexp.MatchString(k):
+							log.Error("inside erRegexp case")
 							parts := erRegexp.FindSubmatch([]byte(k))
 							idx, _ := strconv.ParseInt(string(parts[1]), 16, 64)
 							executionRequestsMap[int(idx)] = v
