@@ -50,17 +50,13 @@ func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string,
 	trackedPrefixes := []*regexp.Regexp{
 		regexp.MustCompile("b/[0-9a-z]+/b/"),
 	}
-	client, err := rpc.Dial(backendURL)
-	for err != nil {
-		time.Sleep(1 * time.Second)
-		client, err = rpc.Dial(backendURL)
-	}
+	
 	if err != nil {
 		return nil, err
 	}
 	var block miniBlock
 	for i := 0; i < 720 ; i++ { // Retry for up to 1 hour (5 seconds * 720 = 3600 seconds = 1 hour, ignoring Call latency)
-		err := client.Call(&block, "eth_getBlockByNumber", "latest", false);
+		err := sessionClient.Call(&block, "eth_getBlockByNumber", "latest", false);
 		if err == nil {
 			break
 		}
@@ -68,7 +64,7 @@ func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string,
 		time.Sleep(5 * time.Second)
 	}
 	var chainid hexutil.Uint64
-	if err := client.Call(&chainid, "eth_chainId"); err != nil {
+	if err := sessionClient.Call(&chainid, "eth_chainId"); err != nil {
 		return nil, err
 	}
 	processed := uint64(0)
@@ -101,7 +97,7 @@ func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string,
 	if err != nil { return nil, err }
 	return &StreamManager{
 		consumer: consumer,
-		client: client,
+		client: sessionClient,
 		ready: make(chan struct{}, 1),
 		chainid: int(chainid),
 		backendURL: backendURL,

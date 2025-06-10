@@ -18,7 +18,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/node"
 	// "github.com/ethereum/go-ethereum/log"
-	// "github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc"
 	
 	"github.com/savaki/cloudmetrics"
 	"github.com/pubnub/go-metrics-statsd"
@@ -34,6 +34,8 @@ var (
 	flags = *flag.NewFlagSet("beacon-agent", flag.ContinueOnError)
 	debug = flag.Bool("debug", false, "Enable debug APIs")
 	exitWhenSynced = flag.Bool("exitwhensynced", false, "Terminate when caught up with the network")
+
+	sessionClient *rpc.Client
 )
 
 type beaconAgentModule struct {
@@ -44,7 +46,14 @@ func init() {
 	xplugeth.RegisterModule[beaconAgentModule]("beacon-agent")
 }
 
-func (*beaconAgentModule) InitializeNode(*node.Node, types.Backend) {
+func (*beaconAgentModule) InitializeNode(s *node.Node, b types.Backend) {
+	var err error
+	sessionClient, err = s.Attach()
+	if err != nil {
+		log.Error("error establishing client, beacon agent plugin", "err", err)
+	}
+
+
 	log.Info("Beacon Agent module initialized")
 }
 
@@ -96,7 +105,7 @@ func agent() {
 	log.Root().SetHandler(log.LvlFilterHandler(logLvl, log.Root().GetHandler()))
 
 	if len(cfg.Brokers) == 0 {
-		log.Error("No brokers specified")
+		log.Error("No brokers specified beacon agent plugin")
 		os.Exit(1)
 	}
 	if *debug {
