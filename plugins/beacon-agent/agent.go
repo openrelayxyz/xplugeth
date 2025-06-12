@@ -68,10 +68,14 @@ func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string,
 		return nil, err
 	}
 	processed := uint64(0)
-	lastNum := int64(block.Number)
-	lastHash := types.Hash(block.Hash)
-	lastWeight := new(big.Int).Add(block.Td.ToInt(), big.NewInt(int64(block.Number)))
-	resumption, err := transports.ResumptionForTimestamp(brokerParams, int64(int(block.Timestamp) - rollbackInSeconds) * 1000)
+	// lastNum := int64(block.Number)
+	// lastHash := types.Hash(block.Hash)
+	// lastWeight := new(big.Int).Add(block.Td.ToInt(), big.NewInt(int64(block.Number)))
+	// resumption, err := transports.ResumptionForTimestamp(brokerParams, int64(int(block.Timestamp) - rollbackInSeconds) * 1000)
+	// if err != nil {
+	// 	log.Warn("Could not generate resumption token", "err", err)
+	// }
+	_, err = transports.ResumptionForTimestamp(brokerParams, int64(int(block.Timestamp) - rollbackInSeconds) * 1000)
 	if err != nil {
 		log.Warn("Could not generate resumption token", "err", err)
 	}
@@ -80,10 +84,13 @@ func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string,
 	// It should be safe to calculate resumption weight this way. The producer
 	// won't start publishing until the merge block, at which point it will set
 	// the weight to Td + block Number. If we start up before the merge,
-	consumer, err = transports.ResolveMuxConsumer(brokerParams, resumption, &delivery.ConsumerConfig{
-		LastEmittedNum: lastNum,
-		LastHash: lastHash,
-		LastWeight: lastWeight,
+
+	var emptyHash types.Hash
+	var emptyResumption []byte
+	consumer, err = transports.ResolveMuxConsumer(brokerParams, emptyResumption, &delivery.ConsumerConfig{
+		LastEmittedNum: 0,
+		LastHash: emptyHash,
+		LastWeight: new(big.Int),
 		ReorgThreshold: 128,
 		TrackedPrefixes: trackedPrefixes,
 		Whitelist: whitelist,
