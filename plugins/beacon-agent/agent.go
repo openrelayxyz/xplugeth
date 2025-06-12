@@ -2,23 +2,23 @@ package agent
 
 import (
 	"math/big"
-	"strconv"
-	"fmt"
-	"regexp"
-	"runtime"
-	"time"
-	"sync"
-	
 	"github.com/openrelayxyz/cardinal-streams/v2/delivery"
 	"github.com/openrelayxyz/cardinal-streams/v2/transports"
 	"github.com/openrelayxyz/cardinal-types"
 	"github.com/openrelayxyz/cardinal-types/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	beacon "github.com/ethereum/go-ethereum/beacon/engine"
+	beacon "github.com/openrelayxyz/xplugeth/plugins/beacon-agent/engine"
+	// beacon "github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/rlp"
+	// "encoding/json"
 	"github.com/ethereum/go-ethereum/rpc"
-	
+	"strconv"
+	"fmt"
+	"regexp"
+	"runtime"
+	"time"
+	"sync"
 	log "github.com/inconshreveable/log15"
 )
 
@@ -47,19 +47,19 @@ type miniBlock struct {
 }
 
 func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string, rollbackInSeconds int, terminalDifficulty *big.Int, whitelist map[uint64]types.Hash) (*StreamManager, error) {
+	var err error
 	trackedPrefixes := []*regexp.Regexp{
 		regexp.MustCompile("b/[0-9a-z]+/b/"),
 	}
-	
-	if err != nil {
-		return nil, err
-	}
+
 	var block miniBlock
 	for i := 0; i < 720 ; i++ { // Retry for up to 1 hour (5 seconds * 720 = 3600 seconds = 1 hour, ignoring Call latency)
 		err := sessionClient.Call(&block, "eth_getBlockByNumber", "latest", false);
 		if err == nil {
+			log.Error("inside of new stream manager err == nil we go a block")
 			break
 		}
+		log.Error("inside of new stream manager err != nil")
 		log.Warn("Failed to get initial block. Retrying.", "err", err, "retries", i)
 		time.Sleep(5 * time.Second)
 	}
@@ -68,14 +68,10 @@ func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string,
 		return nil, err
 	}
 	processed := uint64(0)
-	// lastNum := int64(block.Number)
-	// lastHash := types.Hash(block.Hash)
-	// lastWeight := new(big.Int).Add(block.Td.ToInt(), big.NewInt(int64(block.Number)))
-	// resumption, err := transports.ResumptionForTimestamp(brokerParams, int64(int(block.Timestamp) - rollbackInSeconds) * 1000)
-	// if err != nil {
-	// 	log.Warn("Could not generate resumption token", "err", err)
-	// }
-	_, err = transports.ResumptionForTimestamp(brokerParams, int64(int(block.Timestamp) - rollbackInSeconds) * 1000)
+	lastNum := int64(block.Number)
+	lastHash := types.Hash(block.Hash)
+	lastWeight := new(big.Int).Add(block.Td.ToInt(), big.NewInt(int64(block.Number)))
+	resumption, err := transports.ResumptionForTimestamp(brokerParams, int64(int(block.Timestamp) - rollbackInSeconds) * 1000)
 	if err != nil {
 		log.Warn("Could not generate resumption token", "err", err)
 	}
@@ -84,12 +80,10 @@ func NewStreamManager(brokerParams []transports.BrokerParams, backendURL string,
 	// It should be safe to calculate resumption weight this way. The producer
 	// won't start publishing until the merge block, at which point it will set
 	// the weight to Td + block Number. If we start up before the merge,
-	var emptyHash types.Hash
-	var emptyResumption []byte
-	consumer, err = transports.ResolveMuxConsumer(brokerParams, emptyResumption, &delivery.ConsumerConfig{
-		LastEmittedNum: 0,
-		LastHash: emptyHash,
-		LastWeight: new(big.Int),
+	consumer, err = transports.ResolveMuxConsumer(brokerParams, resumption, &delivery.ConsumerConfig{
+		LastEmittedNum: lastNum,
+		LastHash: lastHash,
+		LastWeight: lastWeight,
 		ReorgThreshold: 128,
 		TrackedPrefixes: trackedPrefixes,
 		Whitelist: whitelist,
@@ -184,10 +178,15 @@ func (m *StreamManager) Start() <-chan error {
 				for _, pb := range added {
 					log.Error("inside of pb for loop")
 					var params beacon.ExecutableData
+					//remove execution witness 
 					if err := rlp.DecodeBytes(pb.Values[fmt.Sprintf("b/%x/b/%x/h", m.chainid, pb.Hash.Bytes())], &params); err != nil {
-						log.Warn("Failed to rlp Decode block", "number", pb.Number, "err", err)
+						log.Warn("Failed to rlp Decode block", "number", pb.Number, "hash", pb.Hash, "chainId", m.chainid, "err", err)
 						continue
 					}
+					// if err := json.Unmarshal(pb.Values[fmt.Sprintf("b/%x/b/%x/h", m.chainid, pb.Hash.Bytes())], &params); err != nil {
+					// 	log.Warn("Failed to rlp Decode block", "number", pb.Number, "hash", pb.Hash, "chainId", m.chainid, "err", err)
+					// 	continue
+					// }
 					txs := make(map[int][]byte)
 					versionedHashesMap := make(map[int]common.Hash)
 					executionRequestsMap := make(map[int][]byte)

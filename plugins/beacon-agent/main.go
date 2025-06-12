@@ -47,12 +47,10 @@ func init() {
 }
 
 func (*beaconAgentModule) InitializeNode(s *node.Node, b types.Backend) {
-	var err error
-	sessionClient, err = s.Attach()
-	if err != nil {
-		log.Error("error establishing client, beacon agent plugin", "err", err)
+	sessionClient = s.Attach()
+	if sessionClient == nil {
+		log.Error("client is nil beacon agent plugin")
 	}
-
 
 	log.Info("Beacon Agent module initialized")
 }
