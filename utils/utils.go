@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"context"
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/types"
@@ -41,8 +42,8 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	defer client.Close()
 
 	if backend, ok := xplugeth.GetSingleton[types.Backend](); ok {
-		if tdbackend, ok := backend.(GetTDBackend) {
-			return tdbackend.GetTd(context.Background(), hash), nil
+		if td := backend.(GetTDBackend).GetTd(context.Background(), hash); td != nil {
+			return td, nil
 		}
 	}
 
