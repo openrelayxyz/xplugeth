@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -25,6 +26,10 @@ func GetChainID() (int64, bool) {
 	return int64(hex), true
 }
 
+type GetTDBackend interface {
+	GetTd(ctx context.Context, hash common.Hash) *big.Int
+}
+
 func GetTd(hash common.Hash) (*big.Int, error) {
 	result := new(big.Int)
 	s, ok := xplugeth.GetSingleton[*node.Node]()
@@ -34,6 +39,13 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	var parentBlockJson map[string]json.RawMessage
 	client := s.Attach()
 	defer client.Close()
+
+	if backend, ok := xplugeth.GetSingleton[types.Backend](); ok {
+		if tdbackend, ok := backend.(GetTDBackend) {
+			return tdbackend.GetTd(context.Background(), hash), nil
+		}
+	}
+
 	client.Call(&parentBlockJson, "eth_getBlockByHash", hash, false)
 	raw, ok := parentBlockJson["totalDifficulty"]
 	if !ok {
