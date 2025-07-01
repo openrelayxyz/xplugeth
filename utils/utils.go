@@ -42,8 +42,8 @@ func GetTd(hash common.Hash) (*big.Int, error) {
 	defer client.Close()
 
 	if backend, ok := xplugeth.GetSingleton[types.Backend](); ok {
-		if td := backend.(GetTDBackend).GetTd(context.Background(), hash); td != nil {
-			return td, nil
+		if tdbackend, ok := backend.(GetTDBackend); ok {
+			return tdbackend.GetTd(context.Background(), hash), nil
 		}
 	}
 
