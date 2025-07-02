@@ -39,15 +39,15 @@ def getPatches(cmd):
     finally:
         os.chdir(orig)
 
-def apply_patches(patches):
+def apply_patches(patches, tags):
     for patchset in patches:
-        apply_patchset(patchset)
+        apply_patchset(patchset, tags)
 
-def apply_patchset(patchset):
+def apply_patchset(patchset, tags):
     start_ref = git("rev-parse", "HEAD").strip()
     for patch in patchset:
         try:
-            apply_patch(patch)
+            apply_patch(patch, tags)
         except Exception as e:
             git.reset(start_ref, "--hard")
             print(e)
@@ -57,14 +57,15 @@ def apply_patchset(patchset):
     else:
         raise Exception("No successful pathces applied for patchset")
 
-def apply_patch(patch):
+def apply_patch(patch, tags):
     remote_name = "".join(random.choice(string.ascii_lowercase) for _ in range(6))
     git.remote("add", remote_name, sshRemoteTransformer(patch["remote"]))
     print(git.fetch(remote_name))
     print(git("cherry-pick", patch["ref"]))
     for test in patch["tests"]:
         for testName in test["test"]:
-            print(test["package"], "-run", testName)
+            t = ','.join(tags.split())
+            print(test["package"], f"-tags={t}", "-run", testName)
             print(go.test(test["package"], "-run", testName))
 
 def parse_source(remote):
@@ -91,7 +92,7 @@ def push_to_archive(archive, remote, tag, xplugeth_tag, xplugeth_branch):
     git.push(archive, f'HEAD:{branch}')
 
 
-def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements, archive):
+def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements, archive, build_tags):
     if archive:
         xp_branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
         xp_tag = git("describe", "--tags", "--abbrev=0").strip()
@@ -127,9 +128,10 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements, 
         git.config("user.email", "build@plugeth.org")
         git.commit("-m", "xplugeth-build: add plugin imports")
 
-        apply_patches(getPatches(cmd))
+        apply_patches(getPatches(cmd), build_tags)
 
-        print(go.build("-tags=xplugeth", "-o", os.path.join(artifacts_directory, os.path.split(cmd)[-1]), cmd))
+        t = ','.join('xplugeth'.split() + build_tags.split())
+        print(go.build(f"-tags={t}", "-o", os.path.join(artifacts_directory, os.path.split(cmd)[-1]), cmd))
     finally:
         if archive:
             try:
@@ -154,6 +156,7 @@ if __name__ == "__main__":
     parser.add_argument('-w', '--workdir', default=None)
     parser.add_argument('-a', '--artifacts-directory', default="/tmp/output/")
     parser.add_argument('-v', '--archive', nargs="?", const="git@github.com:openrelayxyz/xplugeth-archive.git", default=None)
+    parser.add_argument('-b', '--build-tags', default=None)
     # note: the archive url needs to be ssh to preserve users git credentials
 
     args = parser.parse_args()
@@ -165,8 +168,8 @@ if __name__ == "__main__":
     replacements = [replace.split("=") for replace in args.replace]
 
     if args.workdir:
-        main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, args.workdir, replacements, args.archive)
+        main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, args.workdir, replacements, args.archive, args.build_tags)
     else:
         with tempfile.TemporaryDirectory() as workdir:
-            main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, workdir, replacements, args.archive)
+            main(args.source_remote, args.source_tag, args.plugin or ["github.com/openrelayxyz/xplugeth/build"], args.cmd, args.artifacts_directory, workdir, replacements, args.archive, args.build_tags)
                     
