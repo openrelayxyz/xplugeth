@@ -64,9 +64,13 @@ def apply_patch(patch, tags):
     print(git("cherry-pick", patch["ref"]))
     for test in patch["tests"]:
         for testName in test["test"]:
-            t = ','.join(tags.split())
-            print(test["package"], f"-tags={t}", "-run", testName)
-            print(go.test(test["package"], "-run", testName))
+            if tags is not None:
+                t = ','.join(tags.split())
+                print(test["package"], f"-tags={t}", "-run", testName)
+                print(go.test(test["package"], f"-tags={t}", "-run", testName))
+            else:
+                print(test["package"], "-run", testName)
+                print(go.test(test["package"], "-run", testName))
 
 def parse_source(remote):
     if remote.lower().strip("/") == 'https://github.com/ethereum/go-ethereum':
@@ -130,7 +134,11 @@ def main(remote, tag, plugins, cmd, artifacts_directory, workdir, replacements, 
 
         apply_patches(getPatches(cmd), build_tags)
 
-        t = ','.join('xplugeth'.split() + build_tags.split())
+        if build_tags is not None:
+            t = ','.join('xplugeth'.split() + build_tags.split())
+        else:
+            t = 'xplugeth'
+
         print(go.build(f"-tags={t}", "-o", os.path.join(artifacts_directory, os.path.split(cmd)[-1]), cmd))
     finally:
         if archive:
