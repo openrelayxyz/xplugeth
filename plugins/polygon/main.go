@@ -72,8 +72,6 @@ func (*polygonPlugin) UpdateStreamsSchema(schema map[string]string) {
 }
 
 func (p *polygonPlugin) CardinalAddBlockHook(number int64, hash, parent ctypes.Hash, weight *big.Int, updates map[string][]byte, deletes map[string]struct{}) {
-	weight.Add(weight, big.NewInt(number))
-
 	if p.client == nil {
 		log.Warn("Failed to initialize RPC client, cannot process block")
 		return
