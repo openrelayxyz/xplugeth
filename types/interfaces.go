@@ -77,9 +77,3 @@ type Backend interface {
 }
 
 	//Most of the commented out methods above have been excluded to allow for building across networks. Specifially the backend interface in bor. 
-
-	// TODO:
-	// InsertBlock(data []byte) error // RLP encoded block
-	// GetTrie(hash Hash) (Trie, error)
-	// GetAccountTrie(stateRoot Hash, account Address) (Trie, error)
-	// GetContractCode(Hash) ([]byte, error)
