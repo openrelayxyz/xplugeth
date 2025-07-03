@@ -15,7 +15,7 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/hooks/triecommit"
-	"github.com/openrelayxyz/xplugeth/plugins"
+	"github.com/openrelayxyz/xplugeth/extensions"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -250,7 +250,7 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 				// generalize this so it's not Kafka specific and can work with other
 				// transports.
 				ch := make(chan core.NewTxsEvent, 1000)
-				sub, err := plugins.SubscribeNewTxsEvent(ch)
+				sub, err := extensions.SubscribeNewTxsEvent(ch)
 				if err != nil {
 					panic(fmt.Sprintf("Could not aquire tx subscription, producer", "err", err))
 				}
