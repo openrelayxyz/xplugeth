@@ -1,22 +1,23 @@
 package plugins
 
 import (
-	"context"
-	"math/big"
 	"errors"
 
+	"github.com/openrelayxyz/xplugeth"
+	"github.com/openrelayxyz/xplugeth/types"
+
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 type GetTxEventSubBackend interface {
-	GetTd(ctx context.Context, hash common.Hash) *big.Int
+	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 }
 
-func SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription, error {
+func SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) (event.Subscription, error) {
 	if backend, ok := xplugeth.GetSingleton[types.Backend](); ok {
 		if txsub, ok := backend.(GetTxEventSubBackend); ok {
-			return tdbackend.SubscribeNewTxsEvent(chain), nil
+			return txsub.SubscribeNewTxsEvent(ch), nil
 		} else {
 			return nil, errors.New("Unable to retun tx subscription, xplugeth")
 		}
