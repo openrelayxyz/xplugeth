@@ -5,7 +5,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core"
+	// "github.com/ethereum/go-ethereum/core"
+	// The core package and the methods dependent on its types have been commented out to avoid a circular import
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -47,8 +48,8 @@ type Backend interface {
 	// GetTd(ctx context.Context, hash common.Hash) *big.Int
 	// GetEVM(ctx context.Context, msg *core.Message, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM
 	// GetEVM is commented out as of foundation v1.15.0 due to signature change
-	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
-	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	// SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
+	// SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
 	// SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
 
 	// Transaction pool API
@@ -60,7 +61,7 @@ type Backend interface {
 	Stats() (pending int, queued int)
 	TxPoolContent() (map[common.Address][]*types.Transaction, map[common.Address][]*types.Transaction)
 	TxPoolContentFrom(addr common.Address) ([]*types.Transaction, []*types.Transaction)
-	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+	// SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
 	// ChainConfig() *params.ChainConfig
 
@@ -69,13 +70,13 @@ type Backend interface {
 	// it must also be included here.
 	// GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
 	// GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
-	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
+	// SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
 	// BloomStatus() (uint64, uint64)
 	// ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 }
 
-	//The commented out methods above have been excluded to allow for building across networks. Specifially the backend interface in bor. 
+	//Most of the commented out methods above have been excluded to allow for building across networks. Specifially the backend interface in bor. 
 
 	// TODO:
 	// InsertBlock(data []byte) error // RLP encoded block

@@ -15,6 +15,7 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/hooks/triecommit"
+	"github.com/openrelayxyz/xplugeth/plugins"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -249,7 +250,10 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 				// generalize this so it's not Kafka specific and can work with other
 				// transports.
 				ch := make(chan core.NewTxsEvent, 1000)
-				sub := b.SubscribeNewTxsEvent(ch)
+				sub, err := plugins.SubscribeNewTxsEvent(ch)
+				if err != nil {
+					panic(fmt.Sprintf("Could not aquire tx subscription, producer", "err", err))
+				}
 				brokers, config := transports.ParseKafkaURL(strings.TrimPrefix(cfg.BrokerURL, "kafka://"))
 				configEntries := make(map[string]*string)
 				configEntries["retention.ms"] = strPtr("3600000")
