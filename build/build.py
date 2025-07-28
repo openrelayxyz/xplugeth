@@ -75,8 +75,6 @@ def apply_patch(patch, tags):
 def parse_source(remote):
     if remote.lower().strip("/") == 'https://github.com/ethereum/go-ethereum':
         return 'foundation'
-    elif remote.lower().strip("/") == 'https://github.com/maticnetwork/bor':
-        return 'bor'
     elif remote.lower().strip("/") == 'https://github.com/etclabscore/core-geth':
         return 'etc'
     else:
