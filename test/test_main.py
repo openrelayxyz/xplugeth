@@ -110,7 +110,7 @@ def monitor_node():
         blockno = get_block_number()
         if blockno and blockno >= 2000:
             logging.info(f"block number {blockno} reached, stopping node")
-            time.sleep(5)
+            time.sleep(30)
             terminate_geth()
             time.sleep(5)
             break
