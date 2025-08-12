@@ -11,7 +11,7 @@ def check_blockupdates_values():
         with open('./resources/test_plugeth_data.json', 'r') as tf:
             test_plugeth = json.load(tf)
     except Exception as e:
-        logging.error("error opening test and control files: {e}")
+        logging.error("error opening test and control files blockupdates: {e}")
         raise
 
     # we have to trim the first item from each blockupdates list as they are subcription ids and have no payload
@@ -44,7 +44,7 @@ def check_cardinal_values():
         with open('./resources/test_card_data.json', 'r') as tf:
             test_card = json.load(tf)
     except Exception as e:
-        logging.error("error opening test and control files: {e}")
+        logging.error("error opening test and control files cardinal producer: {e}")
         raise
 
     for i, item in enumerate(control_card):
