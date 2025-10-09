@@ -94,7 +94,9 @@ func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
 	if !ok {
 		cfg = &ProducerConfig{ ReorgThreshold:128 }
 		log.Warn("no config found, producer plugin, all values set to default")
+		log.Error("********NO CONFIG*******")
 	}
+	log.Error("$$$$$$$$$$$ CONFIG FOUND $$$$$$$$$$$$", "cfg", cfg)
 
 	backend = b
 	stack = s
