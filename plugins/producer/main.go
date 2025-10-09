@@ -463,6 +463,7 @@ func getUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, dest
 var publishOnce sync.Once
 
 func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, receipts gtypes.Receipts, destructs map[common.Hash]struct{}, accounts map[common.Hash][]byte, storage map[common.Hash]map[common.Hash][]byte, code map[common.Hash][]byte) {
+	log.Error("this is the cfg", "cfg", cfg)
 	if cfg.Cloudwatchns != "" {
 		mark := uint64(time.Now().Unix())
 		blockTime := block.Time()
