@@ -51,7 +51,7 @@ func (*buildTemplateModule) SetTrieFlushIntervalClone(flushInterval time.Duratio
 }
 
 // InitializeNode fires as the node starts. This brings the plugin module into compliance with the initialize.Initializer interface.
-func (*buildTemplateModule) InitializeNode(stack *node.Node, backend types.Backend) {
+func (*buildTemplateModule) InitializeNode(stack *node.Node, backend types.Backend, cfg any) {
 	log.Info("build template plugin initailized")
 }
 

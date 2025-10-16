@@ -14,7 +14,10 @@ import (
 
 )
 
-var configPath string
+var (
+	configPath string
+	ChainConfig any
+)
 
 type pluginLoader struct {
 	initialized bool
@@ -297,4 +300,8 @@ func GetPatchsets() [][]Patchset {
 		res = append(res, patchsets)
 	}
 	return res
+}
+
+func GetChainConfig(cfg any) { 
+	ChainConfig = cfg
 }

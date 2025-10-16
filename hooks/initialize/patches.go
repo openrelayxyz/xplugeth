@@ -7,8 +7,8 @@ import (
 var initializePatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_init_v1.15.0_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/be5ea0b65724131135ffe17971a1fdea2e41359d
+		Ref: "hooks_foundation_init_v1.16.4_0",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/aac67dcf4ccdc6612390eee65a902e3474aebafe
 		Tests: []xplugeth.Test{
 			{
 				Package: "./cmd/geth",
@@ -18,6 +18,19 @@ var initializePatchsets = []xplugeth.Patchset {
 			},
 		},
 	},
+	// xplugeth.Patchset{
+	// 	Remote: "github.com/openrelayxyz/xplugeth-patches",
+	// 	Ref: "hooks_foundation_init_v1.15.0_0",
+	// 	// https://github.com/openrelayxyz/xplugeth-patches/commit/be5ea0b65724131135ffe17971a1fdea2e41359d
+	// 	Tests: []xplugeth.Test{
+	// 		{
+	// 			Package: "./cmd/geth",
+	// 			TestNames: []string{
+	// 				"TestGethPkgInjections",
+	// 			},
+	// 		},
+	// 	},
+	// },
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
 		Ref: "hooks_foundation_init_v1.14.12_4",
