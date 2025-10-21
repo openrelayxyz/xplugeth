@@ -41,7 +41,7 @@ func init() {
 	xplugeth.RegisterModule[mergePlugin]("mergePlugin")
 }
 
-func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend) {
+func (*mergePlugin) InitializeNode(s *node.Node, b types.Backend, c any) {
 	stack = *s
 	backend = b
 

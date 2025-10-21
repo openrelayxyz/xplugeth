@@ -39,7 +39,6 @@ var (
 	suCh chan *stateUpdateWithRoot
 )
 
-
 // stateUpdate will be used to track state updates
 type stateUpdate struct {
 	Destructs map[common.Hash]struct{}
@@ -72,7 +71,6 @@ type storedStateUpdate struct {
 	Storage	 []storage
 	Code	[]kvpair
 }
-
 
 // MarshalJSON represents the stateUpdate as JSON for RPC calls
 func (su *stateUpdate) MarshalJSON() ([]byte, error) {
@@ -191,7 +189,7 @@ func init() {
 // InitializeNode is invoked by the plugin loader when the node and Backend are
 // ready. We will track the backend to provide access to blocks and other
 // useful information.
-func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) {
+func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend, c any) {
 	bu.backend = b
 	sessionBackend = b
 	blockEvents = &event.Feed{}
@@ -214,7 +212,6 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	}()
 	log.Info("block updater plugin initialized")
 }
-
 
 // // StateUpdate gives us updates about state changes made in each block. We
 // // cache them for short term use, and write them to disk for the longer term.
@@ -259,6 +256,7 @@ func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Heade
 func (*blockUpdatesModule) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
 	newHead(*block, hash, td)
 }
+
 func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 	if recentEmits.Contains(hash) {
 		log.Debug("Skipping recently emitted block")
@@ -317,7 +315,6 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 		extern.BUPostReorg(common, oldChain, newChain)
 	}
 }
-
 
 // blockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
@@ -391,7 +388,6 @@ func (b *blockUpdatesAPI) TestBlockUpdates(ctx context.Context) string {
 	return "calling back from blockUpdates plugin"
 }
 
-
 // BlockUpdates allows clients to subscribe to notifications of new blocks
 // along with receipts and state updates.
 func (b *blockUpdatesAPI) BlockUpdates(ctx context.Context) (<-chan map[string]interface{}, error) {
@@ -416,7 +412,6 @@ func (b *blockUpdatesAPI) BlockUpdates(ctx context.Context) (<-chan map[string]i
 	return ch, nil
 }
 
-
 // GetAPIs exposes the BlockUpdates service under the cardinal namespace.
 func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
 	return []rpc.API{
@@ -427,14 +422,6 @@ func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rp
 		 Public:		true,
 	 },
  }
-}
-
-func (b *blockUpdatesAPI) BlockUpdatesAPITest(context.Context) string {
-	var notNill bool
-	if b.backend != nil {
-		notNill = true
-	}
-	return fmt.Sprintf("Reprting from blockUpdates, the stack object is not nil: %v", notNill)
 }
 
 var (

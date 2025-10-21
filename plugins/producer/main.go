@@ -83,7 +83,7 @@ func strPtr(x string) *string {
 	return &x
 }
 
-func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
+func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend, c any) {
 
 	if present := xplugeth.HasModule("blockUpdatesModule"); !present {
 		panic("blockUpdates plugin not detected from cardinal plugin")
