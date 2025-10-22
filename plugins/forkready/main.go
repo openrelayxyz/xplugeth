@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/openrelayxyz/xplugeth"
@@ -14,8 +13,6 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 	"github.com/openrelayxyz/xplugeth/types"
 )
-
-var chainConfig any
 
 type forkReadyModule struct {
 }
@@ -25,16 +22,16 @@ func init() {
 }
 
 func (r *forkReadyModule) InitializeNode(stack *node.Node, backend types.Backend, cfg any) {
-	chainConfig = cfg
 	log.Info("forkReady module initialized")
 }
 
-func (r *forkReadyModule) GetAPIs(s *node.Node, b types.Backend) []rpc.API {
+func (r *forkReadyModule) GetAPIs(s *node.Node, b types.Backend, c any) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "cardinal",
 			Service: &forkReadyAPI{
 				stack: s,
+				chainConfig: c,
 			},
 		},
 	}
@@ -42,6 +39,11 @@ func (r *forkReadyModule) GetAPIs(s *node.Node, b types.Backend) []rpc.API {
 
 type forkReadyAPI struct{
 	stack *node.Node
+	chainConfig any
+}
+
+type psudoConfig struct {
+	OsakaTime *uint64
 }
 
 func (r *forkReadyAPI) ForkReady(forkName string) int {
@@ -63,22 +65,25 @@ func (r *forkReadyAPI) ForkReady(forkName string) int {
 				log.Error("error decoding latest block timestamp, forkReady plugin", "err", err)
 				return result
 			}
-			metaCfg := reflect.ValueOf(chainConfig).Type().Elem()
-			if _, ok := metaCfg.FieldByName("OsakaTime"); ok {
-				ptr := chainConfig.(*params.ChainConfig)
-				cfg := *ptr
-				if oTime := cfg.OsakaTime; oTime != nil {
-					if blockTime >= *oTime {
+			metaCfg := reflect.ValueOf(r.chainConfig)
+			if metaCfg.Kind() == reflect.Ptr {
+				metaCfg = metaCfg.Elem()
+			}
+			val := metaCfg.FieldByName("OsakaTime") 
+			if val.IsValid() {
+				if !val.IsNil() {
+					oTime := *val.Interface().(*uint64)
+					// this may need to be complexified if / when other supported chains add osakaTime to their chain configs
+					if blockTime >= oTime {
 						result = 2
 					} else {
 						result = 1
-					} 
+					}
 				} else {
 					result = 0
 				}
 			}
 	}
-
 	return result
 }
 
