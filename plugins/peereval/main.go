@@ -57,7 +57,7 @@ func init() {
 	xplugeth.RegisterFlags(flags)
 }
 
-func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend) {
+func (p *peerEvalModule) InitializeNode(s *node.Node, b types.Backend, c any) {
 	client =  s.Attach()
 		
 	p.peerMetricsMap = make(map[string]*PeerMetrics)

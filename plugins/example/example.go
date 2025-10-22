@@ -41,7 +41,7 @@ type ExampleConfig struct {
 var cfg *ExampleConfig
 
 
-func (*exampleModule) InitializeNode(*node.Node, types.Backend) {
+func (*exampleModule) InitializeNode(*node.Node, types.Backend, any) {
 	log.Info("Example module initialized")
 
 	if *exampleBoolFlag {
@@ -66,7 +66,7 @@ func (*exampleModule) Shutdown() {
 	log.Info("Byeee!")
 }
 
-func (*exampleModule) GetAPIs(*node.Node, types.Backend) []rpc.API {
+func (*exampleModule) GetAPIs(*node.Node, types.Backend, any) []rpc.API {
 	log.Info("Registering plugin APIs")
 	return []rpc.API{
 		{

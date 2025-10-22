@@ -413,15 +413,23 @@ func (b *blockUpdatesAPI) BlockUpdates(ctx context.Context) (<-chan map[string]i
 }
 
 // GetAPIs exposes the BlockUpdates service under the cardinal namespace.
-func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+func (*blockUpdatesModule) GetAPIs(stack *node.Node, backend types.Backend, chainConfig any) []rpc.API {
 	return []rpc.API{
-	 {
-		 Namespace: "plugeth",
-		 Version:	 "1.0",
-		 Service:	 &blockUpdatesAPI{backend},
-		 Public:		true,
-	 },
- }
+		{
+			Namespace: "plugeth",
+			Version:	 "1.0",
+			Service:	 &blockUpdatesAPI{backend},
+			Public:		true,
+		},
+ 	}
+}
+
+func (b *blockUpdatesAPI) BlockUpdatesAPITest(context.Context) string {
+	var notNill bool
+	if b.backend != nil {
+		notNill = true
+	}
+	return fmt.Sprintf("Reprting from blockUpdates, the stack object is not nil: %v", notNill)
 }
 
 var (
