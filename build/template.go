@@ -28,7 +28,7 @@ func init() {
 type buildTemplateModule struct {}
 
 // GetAPIs fires as the node is registering its APIs. It should return a list of rpc.API objects so that plugins can register new RPC methods. This brings the plugin module into compliance with the apis.GetAPIs interface.
-func (*buildTemplateModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+func (*buildTemplateModule) GetAPIs(stack *node.Node, backend types.Backend, cfg any) []rpc.API {
 	return nil
 }
 
