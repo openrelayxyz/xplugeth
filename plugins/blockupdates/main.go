@@ -1,15 +1,15 @@
 package blockupdates
 
 import (
-	"fmt"
-	"io"
 	"context"
 	"encoding/json"
-	"math/big"
 	"errors"
+	"fmt"
+	"io"
+	"math/big"
 	"time"
+
 	lru "github.com/hashicorp/golang-lru"
-	
 
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
@@ -20,13 +20,12 @@ import (
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
 
-	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -201,16 +200,22 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	
 	go func () {
 		db := b.ChainDb()
+		log.Warn("state update persistence goroutine started")
+		count := 0
 		for su := range suCh {
 			data, err := rlp.EncodeToBytes(su.su)
 			if err != nil {
 				log.Error("Failed to encode state update", "root", su.root, "err", err)
+				continue
 			}
 			if err := db.Put(append([]byte("su"), su.root.Bytes()...), data); err != nil {
 				log.Error("Failed to store state update", "root", su.root, "err", err)
+			} else{
+				count++
+				log.Warn("Stored state update to DB", "root", su.root, "size", len(data), "total-persisted", count)
 			}
-			log.Debug("Stored state update", "root", su.root)
 		}
+		log.Warn("State update persistence goroutine ended")
 	}()
 	log.Info("block updater plugin initialized")
 }
@@ -223,6 +228,8 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 		log.Warn("State update called before InitializeNode", "root", blockRoot)
 		return
 	}
+	log.Warn("stateUpdate captured", "root", blockRoot, "destructs", len(destructs), "accounts", len(accounts), "storage_accounts", len(storage), "code", len(codeUpdates))
+
 	su := &stateUpdate{
 		Destructs: destructs,
 		Accounts: accounts,
@@ -230,7 +237,14 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 		Code: codeUpdates,
 	}
 	cache.Add(blockRoot, su)
-	suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}
+	log.Warn("added to cache", "root", blockRoot, "cache_size", cache.Len())
+
+	select {
+    case suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}:
+        log.Debug("Queued for DB persistence", "root", blockRoot, "channel-length", len(suCh))
+    default:
+        log.Error("CRITICAL: suCh buffer full! State update DROPPED", "root", blockRoot, "buffer_size", cap(suCh))
+    }
 }
 
 // AppendAncient removes our state update records from leveldb as the
@@ -240,13 +254,19 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 
 // We have changed the name of this function to ModifyAncients to correspond to the geth implementation. 
 func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Header) {
+	log.Warn("ModifyAncients called", "number", number, "root", header.Root)
 	go func() {
 		// Background this so we can clean up once the backend is set, but we don't
 		// block the creation of the backend.
 		for sessionBackend == nil {
 			time.Sleep(250 * time.Millisecond)
 		}
-		sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
+		log.Warn("Deleting state update from DB", "number", number, "root", header.Root)
+		if err := sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...)); err != nil {
+            log.Error("Failed to delete state update", "root", header.Root, "err", err)
+        } else {
+            log.Warn("Deleted state update", "root", header.Root)
+        }
 	}()
 
 }
@@ -322,8 +342,10 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 // blockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
 func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
+	log.Warn("internal BlockUpdatesByNumber called", "number", number)
 	block, err := sessionBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 	if block == nil {
+		log.Error("internal: block not found", "number", number)
 		return nil, nil, nil, nil, nil, nil, nil, errors.New("block not found") 
 	}
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
@@ -339,13 +361,22 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 
 	var su *stateUpdate
 	if v, ok := cache.Get(block.Root()); ok {
+		log.Warn("internal: state update from cache", "number", number, "root", block.Root())
 		su = v.(*stateUpdate)
 	} else {
+		log.Warn("nternal: querying DB for state update", "number", number, "root", block.Root())
 		su = new(stateUpdate)
 		data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
-		if err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
-		if err := rlp.DecodeBytes(data, su); err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
+		if err != nil { 
+			log.Error("internal: state update not in DB", "number", number, "root", block.Root(), "err", err)
+			return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())
+		}
+		log.Warn("internal: found state update in DB", "number", number, "size", len(data))
+		if err := rlp.DecodeBytes(data, su); err != nil { 
+			log.Error("failed to decode state update", "root", block.Root(), "block", block.Number(), "err", err)
+			return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
 	}
+	log.Warn("internal: successfully retrieved all data", "number", number)
 	return block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code, nil
 }
 
@@ -356,13 +387,17 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 	result["receipts"], err = sessionBackend.GetReceipts(ctx, block.Hash())
 	if err != nil { return nil, err }
 	if v, ok := cache.Get(block.Root()); ok {
+		log.Warn("State update retrieved from cache", "root", block.Root(), "block", block.Number())
 		result["stateUpdates"] = v
 		return result, nil
 	}
+	log.Warn("State update not in cache, querying DB", "root", block.Root(), "block", block.Number())
 	data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 	if err != nil { 
+		log.Error("State update not found in DB", "root", block.Root(), "block", block.Number(), "err", err)
 		return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())
 	}
+	log.Warn("State update retrieved from DB", "root", block.Root(), "block", block.Number(), "size", len(data))
 	su := &stateUpdate{}
 	if err := rlp.DecodeBytes(data, su); err != nil { 
 		return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) 
