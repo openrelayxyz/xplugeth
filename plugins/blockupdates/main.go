@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"time"
+	// "time"
 
 	lru "github.com/hashicorp/golang-lru"
 
@@ -228,7 +228,7 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 		log.Warn("State update called before InitializeNode", "root", blockRoot)
 		return
 	}
-	log.Warn("stateUpdate captured", "root", blockRoot, "destructs", len(destructs), "accounts", len(accounts), "storage_accounts", len(storage), "code", len(codeUpdates))
+	log.Info("stateUpdate captured", "root", blockRoot, "destructs", len(destructs), "accounts", len(accounts), "storage_accounts", len(storage), "code", len(codeUpdates))
 
 	su := &stateUpdate{
 		Destructs: destructs,
@@ -237,7 +237,7 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 		Code: codeUpdates,
 	}
 	cache.Add(blockRoot, su)
-	log.Warn("added to cache", "root", blockRoot, "cache_size", cache.Len())
+	// log.Warn("added to cache", "root", blockRoot, "cache_size", cache.Len())
 
 	select {
     case suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}:
@@ -254,20 +254,20 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 
 // We have changed the name of this function to ModifyAncients to correspond to the geth implementation. 
 func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Header) {
-	log.Warn("ModifyAncients called", "number", number, "root", header.Root)
-	go func() {
-		// Background this so we can clean up once the backend is set, but we don't
-		// block the creation of the backend.
-		for sessionBackend == nil {
-			time.Sleep(250 * time.Millisecond)
-		}
-		log.Warn("Deleting state update from DB", "number", number, "root", header.Root)
-		if err := sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...)); err != nil {
-            log.Error("Failed to delete state update", "root", header.Root, "err", err)
-        } else {
-            log.Warn("Deleted state update", "root", header.Root)
-        }
-	}()
+	log.Error("ModifyAncients called", "number", number, "root", header.Root)
+	// go func() {
+	// 	// Background this so we can clean up once the backend is set, but we don't
+	// 	// block the creation of the backend.
+	// 	for sessionBackend == nil {
+	// 		time.Sleep(250 * time.Millisecond)
+	// 	}
+	// 	log.Warn("Deleting state update from DB", "number", number, "root", header.Root)
+	// 	if err := sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...)); err != nil {
+    //         log.Error("Failed to delete state update", "root", header.Root, "err", err)
+    //     } else {
+    //         log.Error("Deleted state update", "root", header.Root)
+    //     }
+	// }()
 
 }
 
@@ -411,6 +411,9 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 func (b *blockUpdatesAPI) BlockUpdatesByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	block, err := b.backend.BlockByNumber(ctx, number)
 	if err != nil { return nil, err }
+	if block == nil {
+		return nil, fmt.Errorf("block not found, BlockUpdatesByNumber returns nil")
+	}
 	return blockUpdates(ctx, block)
 }
 
