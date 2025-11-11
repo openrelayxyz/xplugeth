@@ -10,8 +10,6 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-
-	rpc "github.com/openrelayxyz/cardinal-rpc"
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
