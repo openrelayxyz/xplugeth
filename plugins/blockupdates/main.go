@@ -7,15 +7,17 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	// "time"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 
+	rpc "github.com/openrelayxyz/cardinal-rpc"
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
-	"github.com/openrelayxyz/xplugeth/hooks/modifyancients"
+
+	// "github.com/openrelayxyz/xplugeth/hooks/modifyancients"
 	"github.com/openrelayxyz/xplugeth/hooks/stateupdates"
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
@@ -200,7 +202,6 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	
 	go func () {
 		db := b.ChainDb()
-		log.Warn("state update persistence goroutine started")
 		count := 0
 		for su := range suCh {
 			data, err := rlp.EncodeToBytes(su.su)
@@ -215,8 +216,17 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 				log.Warn("Stored state update to DB", "root", su.root, "size", len(data), "total-persisted", count)
 			}
 		}
-		log.Warn("State update persistence goroutine ended")
 	}()
+
+	go func(){
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			pruneStateUpdate(b)
+		}
+	}()
+
 	log.Info("block updater plugin initialized")
 }
 
@@ -236,15 +246,38 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 		Storage: storage,
 		Code: codeUpdates,
 	}
-	cache.Add(blockRoot, su)
-	// log.Warn("added to cache", "root", blockRoot, "cache_size", cache.Len())
 
-	select {
-    case suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}:
-        log.Debug("Queued for DB persistence", "root", blockRoot, "channel-length", len(suCh))
-    default:
-        log.Error("CRITICAL: suCh buffer full! State update DROPPED", "root", blockRoot, "buffer_size", cap(suCh))
-    }
+	cache.Add(blockRoot, su)
+	suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}
+}
+
+func pruneStateUpdate(backend types.Backend){
+	currentBlock := backend.CurrentBlock()
+	if currentBlock == nil {return}
+
+	height := currentBlock.Number.Uint64()
+	pruneThreshold := uint64(90000)
+	if height < pruneThreshold {
+		return
+	}
+
+	pruneTarget := height - pruneThreshold
+	ogPruneTarget := pruneTarget
+	log.Info("Starting state update pruning", "current", height, "target", pruneTarget)
+
+	batchLimit := uint64(1000) // the number of blocks that can be deleted in one pruning cycle
+	for i:= pruneTarget; i > 0 && i > pruneTarget - batchLimit; i--{
+		block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(i))
+		if err != nil || block ==nil {
+			log.Error("block not found", "block", i)
+			continue
+		}
+
+		if err := backend.ChainDb().Delete(append([]byte("su"), block.Root().Bytes()...)); err==nil{
+			log.Debug("Pruned state update", "number", i, "root", block.Root())
+		}
+	}
+	log.Info("finished state update pruning batch", "last", pruneTarget, "first", ogPruneTarget)
 }
 
 // AppendAncient removes our state update records from leveldb as the
@@ -253,23 +286,21 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 // updates to an ancients table of their own for longer term retention.
 
 // We have changed the name of this function to ModifyAncients to correspond to the geth implementation. 
-func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Header) {
-	log.Error("ModifyAncients called", "number", number, "root", header.Root)
-	// go func() {
-	// 	// Background this so we can clean up once the backend is set, but we don't
-	// 	// block the creation of the backend.
-	// 	for sessionBackend == nil {
-	// 		time.Sleep(250 * time.Millisecond)
-	// 	}
-	// 	log.Warn("Deleting state update from DB", "number", number, "root", header.Root)
-	// 	if err := sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...)); err != nil {
-    //         log.Error("Failed to delete state update", "root", header.Root, "err", err)
-    //     } else {
-    //         log.Error("Deleted state update", "root", header.Root)
-    //     }
-	// }()
-
-}
+// func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Header) {
+// 	go func() {
+// 		// Background this so we can clean up once the backend is set, but we don't
+// 		// block the creation of the backend.
+// 		for sessionBackend == nil {
+// 			time.Sleep(250 * time.Millisecond)
+// 		}
+// 		log.Warn("Deleting state update from DB", "number", number, "root", header.Root)
+// 		if err := sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...)); err != nil {
+//             log.Error("Failed to delete state update", "root", header.Root, "err", err)
+//         } else {
+//             log.Error("Deleted state update", "root", header.Root)
+//         }
+// 	}()
+// }
 
 // NewHead is invoked when a new block becomes the latest recognized block. We
 // use this to notify the blockEvents channel of new blocks, as well as invoke
@@ -480,7 +511,7 @@ var (
 	_ blockchain.NewHeadPlugin = (*blockUpdatesModule)(nil)
 	_ blockchain.ReorgPlugin = (*blockUpdatesModule)(nil)
 	_ initialize.Initializer = (*blockUpdatesModule)(nil)
-	_ modifyancients.ModifyAncientsPlugin = (*blockUpdatesModule)(nil)
+	// _ modifyancients.ModifyAncientsPlugin = (*blockUpdatesModule)(nil)
 	_ stateupdates.StateUpdatePlugin = (*blockUpdatesModule)(nil)
 
 	_ InternalBlockUpdates = (*blockUpdatesModule)(nil)
