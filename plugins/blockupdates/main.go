@@ -217,7 +217,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	}()
 
 	go func(){
-		ticker := time.NewTicker(10 * time.Minute)
+		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -254,14 +254,14 @@ func pruneStateUpdate(backend types.Backend){
 	if currentBlock == nil {return}
 
 	height := currentBlock.Number.Uint64()
-	pruneThreshold := uint64(90000)
+	pruneThreshold := uint64(70000)
 	if height < pruneThreshold {
 		return
 	}
 
 	pruneTarget := height - pruneThreshold
 	ogPruneTarget := pruneTarget
-	log.Info("Starting state update pruning", "current", height, "target", pruneTarget)
+	log.Warn("Starting state update pruning", "current", height, "target", pruneTarget)
 
 	batchLimit := uint64(1000) // the number of blocks that can be deleted in one pruning cycle
 	for i:= pruneTarget; i > 0 && i > pruneTarget - batchLimit; i--{
@@ -374,7 +374,6 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 	log.Warn("internal BlockUpdatesByNumber called", "number", number)
 	block, err := sessionBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 	if block == nil {
-		log.Error("internal: block not found", "number", number)
 		return nil, nil, nil, nil, nil, nil, nil, errors.New("block not found") 
 	}
 	if err != nil { return nil, nil, nil, nil, nil, nil, nil, err }
@@ -390,22 +389,13 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 
 	var su *stateUpdate
 	if v, ok := cache.Get(block.Root()); ok {
-		log.Warn("internal: state update from cache", "number", number, "root", block.Root())
 		su = v.(*stateUpdate)
 	} else {
-		log.Warn("nternal: querying DB for state update", "number", number, "root", block.Root())
 		su = new(stateUpdate)
 		data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
-		if err != nil { 
-			log.Error("internal: state update not in DB", "number", number, "root", block.Root(), "err", err)
-			return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())
-		}
-		log.Warn("internal: found state update in DB", "number", number, "size", len(data))
-		if err := rlp.DecodeBytes(data, su); err != nil { 
-			log.Error("failed to decode state update", "root", block.Root(), "block", block.Number(), "err", err)
-			return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
+		if err != nil {return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
+		if err := rlp.DecodeBytes(data, su); err != nil {return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
 	}
-	log.Warn("internal: successfully retrieved all data", "number", number)
 	return block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code, nil
 }
 
@@ -416,17 +406,13 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 	result["receipts"], err = sessionBackend.GetReceipts(ctx, block.Hash())
 	if err != nil { return nil, err }
 	if v, ok := cache.Get(block.Root()); ok {
-		log.Warn("State update retrieved from cache", "root", block.Root(), "block", block.Number())
 		result["stateUpdates"] = v
 		return result, nil
 	}
-	log.Warn("State update not in cache, querying DB", "root", block.Root(), "block", block.Number())
 	data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
 	if err != nil { 
-		log.Error("State update not found in DB", "root", block.Root(), "block", block.Number(), "err", err)
 		return nil, fmt.Errorf("State Updates unavailable for block %#x", block.Hash())
 	}
-	log.Warn("State update retrieved from DB", "root", block.Root(), "block", block.Number(), "size", len(data))
 	su := &stateUpdate{}
 	if err := rlp.DecodeBytes(data, su); err != nil { 
 		return nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) 
