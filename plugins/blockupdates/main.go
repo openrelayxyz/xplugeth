@@ -260,8 +260,8 @@ func pruneStateUpdate(backend types.Backend){
 	}
 
 	pruneTarget := height - pruneThreshold
-	ogPruneTarget := pruneTarget
-	log.Warn("Starting state update pruning", "current", height, "target", pruneTarget)
+	lastPruned := pruneTarget
+	log.Error("Starting state update pruning", "current", height, "target", pruneTarget)
 
 	batchLimit := uint64(1000) // the number of blocks that can be deleted in one pruning cycle
 	for i:= pruneTarget; i > 0 && i > pruneTarget - batchLimit; i--{
@@ -274,8 +274,9 @@ func pruneStateUpdate(backend types.Backend){
 		if err := backend.ChainDb().Delete(append([]byte("su"), block.Root().Bytes()...)); err==nil{
 			log.Debug("Pruned state update", "number", i, "root", block.Root())
 		}
+		lastPruned = i 
 	}
-	log.Info("finished state update pruning batch", "last", pruneTarget, "first", ogPruneTarget)
+	log.Error("finished state update pruning batch", "first", pruneTarget, "last", lastPruned)
 }
 
 // AppendAncient removes our state update records from leveldb as the
