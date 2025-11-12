@@ -265,7 +265,9 @@ func pruneStateUpdate(backend types.Backend){
 		}
 
 		if err := backend.ChainDb().Delete(append([]byte("su"), block.Root().Bytes()...)); err==nil{
-			log.Error("Pruned state update", "number", i, "root", block.Root())
+			log.Debug("Pruned state update", "number", i, "root", block.Root())
+		}else{
+			log.Error("Failed to delete state update", "root", block.Root(), "number", i, "err", err)
 		}
 		lastPruned = i 
 	}
