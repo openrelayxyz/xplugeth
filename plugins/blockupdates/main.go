@@ -200,7 +200,6 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	
 	go func () {
 		db := b.ChainDb()
-		count := 0
 		for su := range suCh {
 			data, err := rlp.EncodeToBytes(su.su)
 			if err != nil {
@@ -210,8 +209,6 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 			if err := db.Put(append([]byte("su"), su.root.Bytes()...), data); err != nil {
 				log.Error("Failed to store state update", "root", su.root, "err", err)
 			} else{
-				count++
-				log.Warn("Stored state update to DB", "root", su.root, "size", len(data), "total-persisted", count)
 			}
 		}
 	}()
@@ -236,7 +233,6 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 		log.Warn("State update called before InitializeNode", "root", blockRoot)
 		return
 	}
-	log.Info("stateUpdate captured", "root", blockRoot, "destructs", len(destructs), "accounts", len(accounts), "storage_accounts", len(storage), "code", len(codeUpdates))
 
 	su := &stateUpdate{
 		Destructs: destructs,
@@ -255,9 +251,6 @@ func pruneStateUpdate(backend types.Backend){
 
 	height := currentBlock.Number.Uint64()
 	pruneThreshold := uint64(70000)
-	if height < pruneThreshold {
-		return
-	}
 
 	pruneTarget := height - pruneThreshold
 	lastPruned := pruneTarget
@@ -272,7 +265,7 @@ func pruneStateUpdate(backend types.Backend){
 		}
 
 		if err := backend.ChainDb().Delete(append([]byte("su"), block.Root().Bytes()...)); err==nil{
-			log.Debug("Pruned state update", "number", i, "root", block.Root())
+			log.Error("Pruned state update", "number", i, "root", block.Root())
 		}
 		lastPruned = i 
 	}
@@ -372,7 +365,6 @@ func (bu *blockUpdatesModule) Reorg(common common.Hash, oldChain []common.Hash, 
 // blockUpdates is a service that lets clients query for block updates for a
 // given block by hash or number, or subscribe to new block upates.
 func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error) {
-	log.Warn("internal BlockUpdatesByNumber called", "number", number)
 	block, err := sessionBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 	if block == nil {
 		return nil, nil, nil, nil, nil, nil, nil, errors.New("block not found") 
