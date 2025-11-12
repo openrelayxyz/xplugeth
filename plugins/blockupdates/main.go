@@ -250,13 +250,14 @@ func pruneStateUpdate(backend types.Backend){
 	if currentBlock == nil {return}
 
 	height := currentBlock.Number.Uint64()
-	pruneThreshold := uint64(70000)
+	pruneThreshold := uint64(90000)
 
 	pruneTarget := height - pruneThreshold
 	lastPruned := pruneTarget
+	prunedCount := 0
 	log.Error("Starting state update pruning", "current", height, "target", pruneTarget)
 
-	batchLimit := uint64(1000) // the number of blocks that can be deleted in one pruning cycle
+	batchLimit := uint64(2000) // the max number of blocks that can be deleted in one pruning cycle
 	for i:= pruneTarget; i > 0 && i > pruneTarget - batchLimit; i--{
 		block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil || block ==nil {
@@ -264,14 +265,14 @@ func pruneStateUpdate(backend types.Backend){
 			continue
 		}
 
-		if err := backend.ChainDb().Delete(append([]byte("su"), block.Root().Bytes()...)); err==nil{
-			log.Debug("Pruned state update", "number", i, "root", block.Root())
-		}else{
+		if err := backend.ChainDb().Delete(append([]byte("su"), block.Root().Bytes()...)); err!=nil{
 			log.Error("Failed to delete state update", "root", block.Root(), "number", i, "err", err)
+		}else{
+			prunedCount++
 		}
 		lastPruned = i 
 	}
-	log.Error("finished state update pruning batch", "first", pruneTarget, "last", lastPruned)
+	log.Error("finished state update pruning batch", "first", pruneTarget, "last", lastPruned, "deleted:", prunedCount)
 }
 
 // AppendAncient removes our state update records from leveldb as the
