@@ -250,7 +250,8 @@ func pruneStateUpdate(backend types.Backend){
 	if currentBlock == nil {return}
 
 	height := currentBlock.Number.Uint64()
-	pruneThreshold := uint64(90000)
+	// set to 45k
+	pruneThreshold := uint64(1000)
 
 	pruneTarget := height - pruneThreshold
 	lastPruned := pruneTarget
