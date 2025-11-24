@@ -214,7 +214,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	}()
 
 	go func(){
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -250,15 +250,14 @@ func pruneStateUpdate(backend types.Backend){
 	if currentBlock == nil {return}
 
 	height := currentBlock.Number.Uint64()
-	// set to 45k
-	pruneThreshold := uint64(1000)
+	pruneThreshold := uint64(45000)
 
 	pruneTarget := height - pruneThreshold
 	lastPruned := pruneTarget
 	prunedCount := 0
-	log.Error("Starting state update pruning", "current", height, "target", pruneTarget)
+	log.Info("Starting state update pruning", "current", height, "target", pruneTarget)
 
-	batchLimit := uint64(2000) // the max number of blocks that can be deleted in one pruning cycle
+	batchLimit := uint64(1500) // the max number of blocks that can be deleted in one pruning cycle
 	for i:= pruneTarget; i > 0 && i > pruneTarget - batchLimit; i--{
 		block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil || block ==nil {
@@ -273,7 +272,7 @@ func pruneStateUpdate(backend types.Backend){
 		}
 		lastPruned = i 
 	}
-	log.Error("finished state update pruning batch", "first", pruneTarget, "last", lastPruned, "deleted:", prunedCount)
+	log.Info("finished state update pruning batch", "first", pruneTarget, "last", lastPruned, "deleted:", prunedCount)
 }
 
 // AppendAncient removes our state update records from leveldb as the
