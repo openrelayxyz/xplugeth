@@ -256,7 +256,7 @@ func pruneStateUpdate(backend types.Backend){
 	prunedCount := 0
 	firstDeleted := uint64(0)
     lastDeleted := uint64(0)
-	log.Info("Starting state update pruning", "current", height, "target", pruneTarget)
+	log.Error("Starting state update pruning", "current", height, "target", pruneTarget)
 
 	batchLimit := uint64(1500) // the max number of blocks that can be deleted in one pruning cycle
 	for i:= pruneTarget; i > 0 && i > pruneTarget - batchLimit; i--{
@@ -278,9 +278,9 @@ func pruneStateUpdate(backend types.Backend){
         }
 	}
 	if prunedCount > 0 {
-        log.Info("Finished pruning", "first", firstDeleted, "last", lastDeleted, "total_deleted", prunedCount)
+        log.Error("Finished pruning", "first", firstDeleted, "last", lastDeleted, "total_deleted", prunedCount)
     } else {
-        log.Info("No state updates to prune in this range")
+        log.Error("No state updates to prune in this range")
     }
 }
 
