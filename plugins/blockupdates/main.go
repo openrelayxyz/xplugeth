@@ -214,7 +214,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	}()
 
 	go func(){
-		ticker := time.NewTicker(4 * time.Minute)
+		ticker := time.NewTicker(4 * time.Minute) // should be 10 minutes. 4minutes was set only for testing
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -250,7 +250,7 @@ func pruneStateUpdate(backend types.Backend){
 	if currentBlock == nil {return}
 
 	height := currentBlock.Number.Uint64()
-	pruneThreshold := uint64(1000)
+	pruneThreshold := uint64(1000) // should be 45,0000. 1k was set for testing 
 
 	pruneTarget := height - pruneThreshold
 	prunedCount := 0
