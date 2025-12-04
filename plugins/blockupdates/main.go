@@ -2,6 +2,7 @@ package blockupdates
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -208,13 +210,12 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 			}
 			if err := db.Put(append([]byte("su"), su.root.Bytes()...), data); err != nil {
 				log.Error("Failed to store state update", "root", su.root, "err", err)
-			} else{
 			}
 		}
 	}()
 
 	go func(){
-		ticker := time.NewTicker(4 * time.Minute) // should be 10 minutes. 4minutes was set only for testing
+		ticker := time.NewTicker(10 * time.Minute) 
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -250,19 +251,37 @@ func pruneStateUpdate(backend types.Backend){
 	if currentBlock == nil {return}
 
 	height := currentBlock.Number.Uint64()
-	pruneThreshold := uint64(1000) // should be 45,0000. 1k was set for testing 
-
+	pruneThreshold := uint64(45000) 
+	if height < pruneThreshold {return}
 	pruneTarget := height - pruneThreshold
+
+
+	lastPrunedKey := []byte("lastPrunedStateUpdate")
+	var lastPruned uint64
+    data, err := backend.ChainDb().Get(lastPrunedKey)
+    if err != nil {
+		setLastPruned(backend.ChainDb(), lastPrunedKey, height)
+		return
+    }
+	lastPruned = binary.BigEndian.Uint64(data)
+
+	if lastPruned >= pruneTarget {
+		return
+	}
+
 	prunedCount := 0
 	firstDeleted := uint64(0)
-    lastDeleted := uint64(0)
-	log.Error("Starting state update pruning", "current", height, "target", pruneTarget)
+	batchLimit := 1500
+	newLastPruned := lastPruned
 
-	batchLimit := uint64(1500) // the max number of blocks that can be deleted in one pruning cycle
-	for i:= pruneTarget; i > 0 && i > pruneTarget - batchLimit; i--{
+	log.Info("Starting state update pruning", "from", lastPruned + 1, "to", pruneTarget)
+	for i := lastPruned + 1; i <= pruneTarget ; i++{
+		if prunedCount >= batchLimit {
+			break
+		}
 		block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(i))
 		if err != nil || block ==nil {
-			log.Error("block not found", "block", i)
+			newLastPruned = i
 			continue
 		}
 
@@ -271,40 +290,26 @@ func pruneStateUpdate(backend types.Backend){
             if err := backend.ChainDb().Delete(key); err == nil {
                 if firstDeleted == 0 {
                     firstDeleted = i
-                }
-                lastDeleted = i
+                } 
                 prunedCount++
             }
         }
+		newLastPruned = i 
+	}
+
+	if newLastPruned > lastPruned {
+		setLastPruned(backend.ChainDb(), lastPrunedKey, newLastPruned)
 	}
 	if prunedCount > 0 {
-        log.Error("Finished pruning", "first", firstDeleted, "last", lastDeleted, "total_deleted", prunedCount)
-    } else {
-        log.Error("No state updates to prune in this range")
+        log.Info("Finished pruning", "first", firstDeleted, "last", newLastPruned, "total_deleted", prunedCount)
     }
 }
 
-// AppendAncient removes our state update records from leveldb as the
-// corresponding blocks are moved from leveldb to the ancients database. At
-// some point in the future, we may want to look at a way to move the state
-// updates to an ancients table of their own for longer term retention.
-
-// We have changed the name of this function to ModifyAncients to correspond to the geth implementation. 
-// func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Header) {
-// 	go func() {
-// 		// Background this so we can clean up once the backend is set, but we don't
-// 		// block the creation of the backend.
-// 		for sessionBackend == nil {
-// 			time.Sleep(250 * time.Millisecond)
-// 		}
-// 		log.Warn("Deleting state update from DB", "number", number, "root", header.Root)
-// 		if err := sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...)); err != nil {
-//             log.Error("Failed to delete state update", "root", header.Root, "err", err)
-//         } else {
-//             log.Error("Deleted state update", "root", header.Root)
-//         }
-// 	}()
-// }
+func setLastPruned(db ethdb.KeyValueStore, key []byte, blockNum uint64) {
+    buf := make([]byte, 8)
+    binary.BigEndian.PutUint64(buf, blockNum)
+    db.Put(key, buf)
+}
 
 // NewHead is invoked when a new block becomes the latest recognized block. We
 // use this to notify the blockEvents channel of new blocks, as well as invoke
