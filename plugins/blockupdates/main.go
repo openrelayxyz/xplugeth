@@ -16,7 +16,6 @@ import (
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
 
-	// "github.com/openrelayxyz/xplugeth/hooks/modifyancients"
 	"github.com/openrelayxyz/xplugeth/hooks/stateupdates"
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
@@ -38,6 +37,7 @@ var (
 	recentEmits *lru.Cache
 	blockEvents *event.Feed
 	suCh chan *stateUpdateWithRoot
+	lastPruned []byte
 )
 
 
@@ -199,6 +199,21 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	cache, _ = lru.New(128)
 	recentEmits, _ = lru.New(128)
 	suCh = make(chan *stateUpdateWithRoot, 128)
+
+	hasLast, err := b.ChainDb().Has([]byte("lastPrunedStateUpdate"))
+	if err != nil {
+		log.Error("error returned checking for last pruned block")
+	}
+
+	currentBlock := backend.CurrentBlock()
+	if !hasLast {
+		currentNumber := currentBlock.Number.Uint64()
+		u64Byte := make([]byte, 8)
+    	binary.BigEndian.PutUint64(b, u)
+		lastPruned = u64Byte
+	} else {
+		lastPruned = backend.ChainDb().Get([]byte(("lastPrunedStateUpdate"))
+	}
 	
 	go func () {
 		db := b.ChainDb()
@@ -215,7 +230,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	}()
 
 	go func(){
-		ticker := time.NewTicker(10 * time.Minute) 
+		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
 
 		for range ticker.C {
@@ -248,22 +263,16 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 
 func pruneStateUpdate(backend types.Backend){
 	currentBlock := backend.CurrentBlock()
-	if currentBlock == nil {return}
+	if currentBlock == nil {
+		log.Error("unable to acquire current block, BlockUpdates plugin")
+		return
+	}
 
 	height := currentBlock.Number.Uint64()
 	pruneThreshold := uint64(45000) 
 	if height < pruneThreshold {return}
 	pruneTarget := height - pruneThreshold
 
-
-	lastPrunedKey := []byte("lastPrunedStateUpdate")
-	var lastPruned uint64
-    data, err := backend.ChainDb().Get(lastPrunedKey)
-    if err != nil {
-		setLastPruned(backend.ChainDb(), lastPrunedKey, height)
-		return
-    }
-	lastPruned = binary.BigEndian.Uint64(data)
 
 	if lastPruned >= pruneTarget {
 		return
@@ -319,6 +328,7 @@ func setLastPruned(db ethdb.KeyValueStore, key []byte, blockNum uint64) {
 func (*blockUpdatesModule) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
 	newHead(*block, hash, td)
 }
+
 func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 	if recentEmits.Contains(hash) {
 		log.Debug("Skipping recently emitted block")
@@ -505,7 +515,6 @@ var (
 	_ blockchain.NewHeadPlugin = (*blockUpdatesModule)(nil)
 	_ blockchain.ReorgPlugin = (*blockUpdatesModule)(nil)
 	_ initialize.Initializer = (*blockUpdatesModule)(nil)
-	// _ modifyancients.ModifyAncientsPlugin = (*blockUpdatesModule)(nil)
 	_ stateupdates.StateUpdatePlugin = (*blockUpdatesModule)(nil)
 
 	_ InternalBlockUpdates = (*blockUpdatesModule)(nil)
