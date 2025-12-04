@@ -205,14 +205,17 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 		log.Error("error returned checking for last pruned block")
 	}
 
-	currentBlock := backend.CurrentBlock()
+	currentBlock := b.CurrentBlock()
 	if !hasLast {
 		currentNumber := currentBlock.Number.Uint64()
 		u64Byte := make([]byte, 8)
-    	binary.BigEndian.PutUint64(b, u)
+    	binary.BigEndian.PutUint64(u64Byte, currentNumber)
 		lastPruned = u64Byte
 	} else {
-		lastPruned = backend.ChainDb().Get([]byte(("lastPrunedStateUpdate"))
+		lastPruned, err = b.ChainDb().Get([]byte("lastPrunedStateUpdate"))
+		if err != nil {
+			log.Error("error retrieving last pruned block, blockupdates", "err", err)
+		}
 	}
 	
 	go func () {
@@ -268,23 +271,25 @@ func pruneStateUpdate(backend types.Backend){
 		return
 	}
 
+	lp := binary.BigEndian.Uint64(lastPruned)
+
 	height := currentBlock.Number.Uint64()
 	pruneThreshold := uint64(45000) 
 	if height < pruneThreshold {return}
 	pruneTarget := height - pruneThreshold
 
 
-	if lastPruned >= pruneTarget {
+	if lp >= pruneTarget {
 		return
 	}
 
 	prunedCount := 0
 	firstDeleted := uint64(0)
 	batchLimit := 1500
-	newLastPruned := lastPruned
+	newLastPruned := lp
 
-	log.Info("Starting state update pruning", "from", lastPruned + 1, "to", pruneTarget)
-	for i := lastPruned + 1; i <= pruneTarget ; i++{
+	log.Info("Starting state update pruning", "from", lp + 1, "to", pruneTarget)
+	for i := lp + 1; i <= pruneTarget ; i++{
 		if prunedCount >= batchLimit {
 			break
 		}
@@ -306,8 +311,8 @@ func pruneStateUpdate(backend types.Backend){
 		newLastPruned = i 
 	}
 
-	if newLastPruned > lastPruned {
-		setLastPruned(backend.ChainDb(), lastPrunedKey, newLastPruned)
+	if newLastPruned > lp {
+		setLastPruned(backend.ChainDb(), []byte("lastPrunedStateUpdate"), newLastPruned)
 	}
 	if prunedCount > 0 {
         log.Info("Finished pruning", "first", firstDeleted, "last", newLastPruned, "total_deleted", prunedCount)
