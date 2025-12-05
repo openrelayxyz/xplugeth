@@ -37,7 +37,7 @@ var (
 	recentEmits *lru.Cache
 	blockEvents *event.Feed
 	suCh chan *stateUpdateWithRoot
-	lastPruned []byte
+	lastPruned uint64
 )
 
 
@@ -202,20 +202,18 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 
 	hasLast, err := b.ChainDb().Has([]byte("lastPrunedStateUpdate"))
 	if err != nil {
-		log.Error("error returned checking for last pruned block")
+		log.Error("error returned checking for last pruned block", "err", err)
 	}
 
-	currentBlock := b.CurrentBlock()
 	if !hasLast {
-		currentNumber := currentBlock.Number.Uint64()
-		u64Byte := make([]byte, 8)
-    	binary.BigEndian.PutUint64(u64Byte, currentNumber)
-		lastPruned = u64Byte
+		currentBlock := b.CurrentBlock()
+		lastPruned = currentBlock.Number.Uint64()
 	} else {
-		lastPruned, err = b.ChainDb().Get([]byte("lastPrunedStateUpdate"))
+		lp, err := b.ChainDb().Get([]byte("lastPrunedStateUpdate"))
 		if err != nil {
-			log.Error("error retrieving last pruned block, blockupdates", "err", err)
+			log.Error("error retrieving last pruned block, initializeNode, blockupdates", "err", err)
 		}
+		lastPruned = binary.BigEndian.Uint64(lp)
 	}
 	
 	go func () {
@@ -271,25 +269,24 @@ func pruneStateUpdate(backend types.Backend){
 		return
 	}
 
-	lp := binary.BigEndian.Uint64(lastPruned)
-
 	height := currentBlock.Number.Uint64()
 	pruneThreshold := uint64(45000) 
 	if height < pruneThreshold {return}
 	pruneTarget := height - pruneThreshold
 
 
-	if lp >= pruneTarget {
+	if lastPruned >= pruneTarget {
 		return
 	}
 
 	prunedCount := 0
 	firstDeleted := uint64(0)
 	batchLimit := 1500
-	newLastPruned := lp
+	newLastPruned := lastPruned
 
-	log.Info("Starting state update pruning", "from", lp + 1, "to", pruneTarget)
-	for i := lp + 1; i <= pruneTarget ; i++{
+	log.Info("Starting state update pruning", "from", lastPruned + 1, "to", pruneTarget)
+
+	for i := lastPruned + 1; i <= pruneTarget ; i++{
 		if prunedCount >= batchLimit {
 			break
 		}
@@ -311,7 +308,7 @@ func pruneStateUpdate(backend types.Backend){
 		newLastPruned = i 
 	}
 
-	if newLastPruned > lp {
+	if newLastPruned > lastPruned {
 		setLastPruned(backend.ChainDb(), []byte("lastPrunedStateUpdate"), newLastPruned)
 	}
 	if prunedCount > 0 {
@@ -320,8 +317,9 @@ func pruneStateUpdate(backend types.Backend){
 }
 
 func setLastPruned(db ethdb.KeyValueStore, key []byte, blockNum uint64) {
+	lastPruned = blockNum
     buf := make([]byte, 8)
-    binary.BigEndian.PutUint64(buf, blockNum)
+    binary.BigEndian.PutUint64(buf, lastPruned)
     db.Put(key, buf)
 }
 
