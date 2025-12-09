@@ -208,6 +208,7 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	if !hasLast {
 		currentBlock := b.CurrentBlock()
 		lastPruned = currentBlock.Number.Uint64()
+		setLastPruned(b.ChainDb(), []byte("lastPrunedStateUpdate"), lastPruned)
 	} else {
 		lp, err := b.ChainDb().Get([]byte("lastPrunedStateUpdate"))
 		if err != nil {
