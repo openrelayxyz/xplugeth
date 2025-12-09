@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net"
 	"time"
+	"os"
 	"strings"
 	"sync"
 
@@ -477,7 +478,8 @@ func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, re
 		}
 	}
 	if producer == nil {
-		panic("Unknown broker. Please set --cardinal.broker.url")
+		log.Error("kafka producer is nil, BlockUpdates, producer plugin, shutting down")
+		os.Exit(1)
 	}
 	ready.Wait()
 	if block.NumberU64() < startBlock {
@@ -500,8 +502,8 @@ func (*cardinalProducerModule) BlockUpdates(block *gtypes.Block, td *big.Int, re
 		deletes,
 		batches,
 	); err != nil {
-		log.Error("Failed to send block", "block", hash, "err", err)
-		panic(err.Error())
+		log.Error("Failed to send block BlockUpdates, producer plugin, shutting down", "block", hash, "err", err)
+		os.Exit(1)
 	}
 	for batchid, update := range batchUpdates {
 		if err := producer.SendBatch(batchid, []string{}, update); err != nil {
