@@ -1,32 +1,32 @@
 package blockupdates
 
 import (
+	"context"
+	"encoding/binary"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"context"
-	"encoding/json"
 	"math/big"
-	"errors"
 	"time"
-	lru "github.com/hashicorp/golang-lru"
-	
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/openrelayxyz/xplugeth"
 	"github.com/openrelayxyz/xplugeth/hooks/apis"
 	"github.com/openrelayxyz/xplugeth/hooks/blockchain"
 	"github.com/openrelayxyz/xplugeth/hooks/initialize"
-	"github.com/openrelayxyz/xplugeth/hooks/modifyancients"
+
 	"github.com/openrelayxyz/xplugeth/hooks/stateupdates"
 	"github.com/openrelayxyz/xplugeth/types"
 	"github.com/openrelayxyz/xplugeth/utils"
 
-	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -37,6 +37,7 @@ var (
 	recentEmits *lru.Cache
 	blockEvents *event.Feed
 	suCh chan *stateUpdateWithRoot
+	lastPruned uint64
 )
 
 
@@ -198,6 +199,23 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 	cache, _ = lru.New(128)
 	recentEmits, _ = lru.New(128)
 	suCh = make(chan *stateUpdateWithRoot, 128)
+
+	hasLast, err := b.ChainDb().Has([]byte("lastPrunedStateUpdate"))
+	if err != nil {
+		log.Error("error returned checking for last pruned block", "err", err)
+	}
+
+	if !hasLast {
+		currentBlock := b.CurrentBlock()
+		lastPruned = currentBlock.Number.Uint64()
+		setLastPruned(b.ChainDb(), []byte("lastPrunedStateUpdate"), lastPruned)
+	} else {
+		lp, err := b.ChainDb().Get([]byte("lastPrunedStateUpdate"))
+		if err != nil {
+			log.Error("error retrieving last pruned block, initializeNode, blockupdates", "err", err)
+		}
+		lastPruned = binary.BigEndian.Uint64(lp)
+	}
 	
 	go func () {
 		db := b.ChainDb()
@@ -205,13 +223,23 @@ func (bu *blockUpdatesModule) InitializeNode(stack *node.Node, b types.Backend) 
 			data, err := rlp.EncodeToBytes(su.su)
 			if err != nil {
 				log.Error("Failed to encode state update", "root", su.root, "err", err)
+				continue
 			}
 			if err := db.Put(append([]byte("su"), su.root.Bytes()...), data); err != nil {
 				log.Error("Failed to store state update", "root", su.root, "err", err)
 			}
-			log.Debug("Stored state update", "root", su.root)
 		}
 	}()
+
+	go func(){
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			pruneStateUpdate(b)
+		}
+	}()
+
 	log.Info("block updater plugin initialized")
 }
 
@@ -223,32 +251,77 @@ func (bu *blockUpdatesModule) StateUpdate(blockRoot, parentRoot common.Hash, des
 		log.Warn("State update called before InitializeNode", "root", blockRoot)
 		return
 	}
+
 	su := &stateUpdate{
 		Destructs: destructs,
 		Accounts: accounts,
 		Storage: storage,
 		Code: codeUpdates,
 	}
+
 	cache.Add(blockRoot, su)
 	suCh <- &stateUpdateWithRoot{su: su, root: blockRoot}
 }
 
-// AppendAncient removes our state update records from leveldb as the
-// corresponding blocks are moved from leveldb to the ancients database. At
-// some point in the future, we may want to look at a way to move the state
-// updates to an ancients table of their own for longer term retention.
+func pruneStateUpdate(backend types.Backend){
+	currentBlock := backend.CurrentBlock()
+	if currentBlock == nil {
+		log.Error("unable to acquire current block, BlockUpdates plugin")
+		return
+	}
 
-// We have changed the name of this function to ModifyAncients to correspond to the geth implementation. 
-func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Header) {
-	go func() {
-		// Background this so we can clean up once the backend is set, but we don't
-		// block the creation of the backend.
-		for sessionBackend == nil {
-			time.Sleep(250 * time.Millisecond)
+	height := currentBlock.Number.Uint64()
+	pruneThreshold := uint64(45000) 
+	if height < pruneThreshold {return}
+	pruneTarget := height - pruneThreshold
+
+
+	if lastPruned >= pruneTarget {
+		return
+	}
+
+	prunedCount := 0
+	firstDeleted := uint64(0)
+	batchLimit := 1500
+	newLastPruned := lastPruned
+
+	log.Info("Starting state update pruning", "from", lastPruned + 1, "to", pruneTarget)
+
+	for i := lastPruned + 1; i <= pruneTarget ; i++{
+		if prunedCount >= batchLimit {
+			break
 		}
-		sessionBackend.ChainDb().Delete(append([]byte("su"), header.Root.Bytes()...))
-	}()
+		block, err := backend.BlockByNumber(context.Background(), rpc.BlockNumber(i))
+		if err != nil || block ==nil {
+			newLastPruned = i
+			continue
+		}
 
+		key := append([]byte("su"), block.Root().Bytes()...)
+		if _, err := backend.ChainDb().Get(key); err == nil {
+            if err := backend.ChainDb().Delete(key); err == nil {
+                if firstDeleted == 0 {
+                    firstDeleted = i
+                } 
+                prunedCount++
+            }
+        }
+		newLastPruned = i 
+	}
+
+	if newLastPruned > lastPruned {
+		setLastPruned(backend.ChainDb(), []byte("lastPrunedStateUpdate"), newLastPruned)
+	}
+	if prunedCount > 0 {
+        log.Info("Finished pruning", "first", firstDeleted, "last", newLastPruned, "total_deleted", prunedCount)
+    }
+}
+
+func setLastPruned(db ethdb.KeyValueStore, key []byte, blockNum uint64) {
+	lastPruned = blockNum
+    buf := make([]byte, 8)
+    binary.BigEndian.PutUint64(buf, lastPruned)
+    db.Put(key, buf)
 }
 
 // NewHead is invoked when a new block becomes the latest recognized block. We
@@ -259,6 +332,7 @@ func (bu *blockUpdatesModule) ModifyAncients(number uint64, header *gtypes.Heade
 func (*blockUpdatesModule) NewHead(block *gtypes.Block, hash common.Hash, logs []*gtypes.Log, td *big.Int) {
 	newHead(*block, hash, td)
 }
+
 func newHead(block gtypes.Block, hash common.Hash, td *big.Int) {
 	if recentEmits.Contains(hash) {
 		log.Debug("Skipping recently emitted block")
@@ -343,8 +417,8 @@ func (b *blockUpdatesModule) BlockUpdatesByNumber(number int64) (*gtypes.Block, 
 	} else {
 		su = new(stateUpdate)
 		data, err := sessionBackend.ChainDb().Get(append([]byte("su"), block.Root().Bytes()...))
-		if err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
-		if err := rlp.DecodeBytes(data, su); err != nil { return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
+		if err != nil {return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State Updates unavailable for block %v", block.Hash())}
+		if err := rlp.DecodeBytes(data, su); err != nil {return block, td, receipts, nil, nil, nil, nil, fmt.Errorf("State updates unavailable for block %#x", block.Hash()) }
 	}
 	return block, td, receipts, su.Destructs, su.Accounts, su.Storage, su.Code, nil
 }
@@ -376,6 +450,9 @@ func blockUpdates(ctx context.Context, block *gtypes.Block) (map[string]interfac
 func (b *blockUpdatesAPI) BlockUpdatesByNumber(ctx context.Context, number rpc.BlockNumber) (map[string]interface{}, error) {
 	block, err := b.backend.BlockByNumber(ctx, number)
 	if err != nil { return nil, err }
+	if block == nil {
+		return nil, fmt.Errorf("block not found, BlockUpdatesByNumber returns nil")
+	}
 	return blockUpdates(ctx, block)
 }
 
@@ -442,7 +519,6 @@ var (
 	_ blockchain.NewHeadPlugin = (*blockUpdatesModule)(nil)
 	_ blockchain.ReorgPlugin = (*blockUpdatesModule)(nil)
 	_ initialize.Initializer = (*blockUpdatesModule)(nil)
-	_ modifyancients.ModifyAncientsPlugin = (*blockUpdatesModule)(nil)
 	_ stateupdates.StateUpdatePlugin = (*blockUpdatesModule)(nil)
 
 	_ InternalBlockUpdates = (*blockUpdatesModule)(nil)
