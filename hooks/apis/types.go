@@ -9,7 +9,7 @@ import (
 )
 
 type GetAPIs interface {
-	GetAPIs(*node.Node, types.Backend) []rpc.API
+	GetAPIs(*node.Node, types.Backend, any) []rpc.API
 }
 
 func init() {

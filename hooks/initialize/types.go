@@ -15,7 +15,7 @@ type Blockchain interface {
 }
 
 type Initializer interface {
-	InitializeNode(*node.Node, types.Backend)
+	InitializeNode(*node.Node, types.Backend, any)
 }
 
 func init() {

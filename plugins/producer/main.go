@@ -84,7 +84,7 @@ func strPtr(x string) *string {
 	return &x
 }
 
-func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend) {
+func (*cardinalProducerModule) InitializeNode(s *node.Node, b types.Backend, c any) {
 
 	if present := xplugeth.HasModule("blockUpdatesModule"); !present {
 		panic("blockUpdates plugin not detected from cardinal plugin")
@@ -563,7 +563,7 @@ func (api *cardinalAPI) ReproduceBlocks(start rpc.BlockNumber, end *rpc.BlockNum
 	return true, nil
 }
 
-func (c *cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend) []rpc.API {
+func (c *cardinalProducerModule) GetAPIs(stack *node.Node, backend types.Backend, chainConfig any) []rpc.API {
 	var v func(int64) (*gtypes.Block, *big.Int, gtypes.Receipts, map[common.Hash]struct{}, map[common.Hash][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Hash][]byte, error)
 	for _, extern := range xplugeth.GetModules[blockupdates.InternalBlockUpdates]() {
 		v = extern.BlockUpdatesByNumber

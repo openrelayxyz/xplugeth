@@ -35,7 +35,7 @@ func init() {
 	xplugeth.RegisterModule[healthCheckModule]("healthcheck")
 }
 
-func (h *healthCheckModule) InitializeNode(s *node.Node, b types.Backend) {
+func (h *healthCheckModule) InitializeNode(s *node.Node, b types.Backend, c any) {
 	h.client = s.Attach()
 
 	h.tolerance = *hcTolerance

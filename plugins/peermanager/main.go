@@ -47,7 +47,7 @@ func init() {
 	xplugeth.RegisterModule[peerManagerModule]("peerManagerModule")
 }
 
-func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend) {
+func (p *peerManagerModule) InitializeNode(s *node.Node, b types.Backend, c any) {
 
 	sessionPeerService = &PeerManager{
 		client: s.Attach(),
