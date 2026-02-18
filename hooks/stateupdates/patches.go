@@ -7,21 +7,8 @@ import (
 var stateupdatesPatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_stateupdates_v1.16.4_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/b4302e7b2f4fb98f82ecc4fe067e44d83bd9166e
-		Tests: []xplugeth.Test{
-			{
-				Package: "./core/state",
-				TestNames: []string{
-					"TestStateInjections",
-				},
-			},
-		},
-	},
-	xplugeth.Patchset{
-		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_stateupdates_v1.15.6_1",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/36beb3fd98c77aded8964cb5ff5965b870918d2f
+		Ref: "hooks_foundation_stateupdates_v1.17.0_0",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/b975026eaa03d57c55c5c00fadd29585af50e706
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core/state",
