@@ -7,8 +7,8 @@ import (
 var stateupdatesPatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_stateupdates_v1.17.0_0",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/b975026eaa03d57c55c5c00fadd29585af50e706
+		Ref: "hooks_foundation_stateupdates_v1.17.2_0",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/e9444a3fec78b11323f70fb64559b638ddbcd35f
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core/state",
