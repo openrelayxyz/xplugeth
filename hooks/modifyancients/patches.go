@@ -7,8 +7,8 @@ import (
 var modifyancientsPatchsets = []xplugeth.Patchset {
 	xplugeth.Patchset{
 		Remote: "github.com/openrelayxyz/xplugeth-patches",
-		Ref: "hooks_foundation_modifyancients_v1.17.0_1",
-		// https://github.com/openrelayxyz/xplugeth-patches/commit/3a071885f2de46c8786ce033914f3a3ab4f28ba7
+		Ref: "hooks_foundation_modifyancients_v1.17.2_0",
+		// https://github.com/openrelayxyz/xplugeth-patches/commit/57236bcd52abefab8e5d39022e7580ee0c14952a
 		Tests: []xplugeth.Test{
 			{
 				Package: "./core/rawdb",
